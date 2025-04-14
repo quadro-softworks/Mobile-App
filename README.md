@@ -1,50 +1,95 @@
-# Welcome to your Expo app 👋
+# Guzo Sync
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Guzo Sync is a comprehensive bus tracking application designed to help passengers track buses, view nearby bus stops, manage bookmarks, receive real-time notifications, and navigate routes efficiently.
 
-## Get started
+## 🧭 Key Features
 
-1. Install dependencies
+### 1. Passenger Dashboard
+- Personalized welcome message
+- Quick access buttons for Buses, Bookmarks, Recents, and Bus Stops Near Me
+- Real-time upcoming bus information
 
-   ```bash
-   npm install
-   ```
+### 2. Live Map
+- View bus locations in real-time
+- Track bus movements on a map
+- See your current location relative to buses and stops
 
-2. Start the app
+### 3. Notifications
+- Receive real-time alerts for bus arrivals
+- Get notified about delays and schedule changes
+- View driver information and ETAs
 
-   ```bash
-    npx expo start
-   ```
+### 4. Bookmarks
+- Save your favorite buses, bus stops, and routes
+- Easily access your frequently used transportation options
+- Categorized view for easy navigation
 
-In the output, you'll find options to open the app in a
+### 5. User Profile
+- Manage personal information
+- Configure notification preferences
+- Adjust application settings
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## 🛠️ Technology Stack
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- React Native / Expo
+- TypeScript
+- Expo Router for navigation
+- React Native reanimated for animations
+- Ionicons for consistent iconography
 
-## Get a fresh project
+## 📱 Screenshots
 
-When you're ready, run:
+(Screenshots will be added once the application is fully developed)
 
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js (14 or higher)
+- npm or yarn
+- Expo CLI
+
+### Installation
+
+1. Clone the repository:
 ```bash
-npm run reset-project
+git clone https://github.com/yourusername/guzosync.git
+cd guzosync
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Install dependencies:
+```bash
+npm install
+# or
+yarn install
+```
 
-## Learn more
+3. Start the development server:
+```bash
+npm start
+# or
+yarn start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+4. Run on a device or emulator:
+```bash
+npm run android
+# or
+npm run ios
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## 📄 License
 
-## Join the community
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-Join our community of developers creating universal apps.
+## 🤝 Contributing
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 👥 Credits
+
+Developed as part of a mobile application development project.
+
+## 📧 Contact
+
+For questions or feedback, please contact [your-email@example.com](mailto:your-email@example.com).
