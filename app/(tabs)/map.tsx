@@ -1,6 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Dimensions, SafeAreaView, Alert, Keyboard } from 'react-native';
-import MapView, { Polyline, Marker } from 'react-native-maps';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  Dimensions,
+  SafeAreaView,
+  Alert,
+  Keyboard,
+} from 'react-native';
+import MapView, { Polyline, Marker, AnimatedRegion } from 'react-native-maps';
 import Icon from '@expo/vector-icons/Ionicons';
 import * as Location from 'expo-location';
 import axios from 'axios';
@@ -8,31 +18,39 @@ import busStops from '../../constants/busStops.json';
 
 const { width, height } = Dimensions.get('window');
 
+const busRoute = [
+  { latitude: 9.0111213, longitude: 38.7447798 },
+  { latitude: 9.01225, longitude: 38.7496507 },
+  { latitude: 9.0135729, longitude: 38.749269 },
+  { latitude: 9.0094789, longitude: 38.7461849 },
+];
+
 const App = () => {
+  const animationIndex = useRef(0);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
+
   const [location, setLocation] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const mapRef = useRef(null);
 
-  const routeCoords = [
-    { latitude: 51.510088, longitude: -0.113025 },
-    { latitude: 51.508530, longitude: -0.113460 },
-    { latitude: 51.506553, longitude: -0.112868 },
-  ];
-
-  const markers = [
-    { id: 1, latitude: 51.510088, longitude: -0.113025 },
-    { id: 2, latitude: 51.506553, longitude: -0.112868 },
-  ];
+  const animatedCoordinate = useRef(
+    new AnimatedRegion({
+      latitude: busRoute[0].latitude,
+      longitude: busRoute[0].longitude,
+      latitudeDelta: 0,
+      longitudeDelta: 0,
+    })
+  ).current;
 
   useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission denied', 'Location permission is required to show your location.');
         return;
       }
 
-      let currentLocation = await Location.getCurrentPositionAsync({});
+      const currentLocation = await Location.getCurrentPositionAsync({});
       setLocation(currentLocation.coords);
 
       mapRef.current?.animateToRegion({
@@ -44,11 +62,29 @@ const App = () => {
     })();
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      animationIndex.current = (animationIndex.current + 1) % busRoute.length;
+      const nextCoord = busRoute[animationIndex.current];
+
+      animatedCoordinate.timing({
+        latitude: nextCoord.latitude,
+        longitude: nextCoord.longitude,
+        duration: 3000,
+        useNativeDriver: false,
+      }).start();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const handleSearch = async () => {
     if (!searchQuery) return;
 
     try {
-      const res = await axios.get(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=1`);
+      const res = await axios.get(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=1`
+      );
       if (res.data.length > 0) {
         const { lat, lon } = res.data[0];
         const latitude = parseFloat(lat);
@@ -72,7 +108,7 @@ const App = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Input Section */}
+      {/* Search Bar */}
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
@@ -87,7 +123,7 @@ const App = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Map Section */}
+      {/* Single MapView */}
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -100,61 +136,48 @@ const App = () => {
         showsUserLocation={true}
         showsMyLocationButton={true}
       >
-        {/* Route Line */}
-        <Polyline coordinates={routeCoords} strokeColor="#007aff" strokeWidth={4} />
+        {/* Simulated Bus Marker */}
+        <Marker.Animated
+          ref={markerRef}
+          coordinate={animatedCoordinate}
+          anchor={{ x: 0.5, y: 0.5 }}
+        >
+          <View style={styles.busIcon}>
+            <Icon name="bus" size={20} color="white" />
+          </View>
+        </Marker.Animated>
 
-        {/* Static Markers */}
-        {markers.map((marker) => (
-          <Marker
-            key={marker.id}
-            coordinate={{ latitude: marker.latitude, longitude: marker.longitude }}
-          >
-            <View style={styles.busStop}>
-              <Icon name="bus" size={18} color="#fff" />
-            </View>
-          </Marker>
-        ))}
+        {/* Bus Route Line */}
+        <Polyline coordinates={busRoute} strokeColor="#007aff" strokeWidth={4} />
 
-        {/* GeoJSON Markers */}
+        {/* Bus Stop Markers from GeoJSON */}
         {busStops.features.map((stop, index) => {
           const [longitude, latitude] = stop.geometry.coordinates;
           return (
             <Marker
-              key={`geojson-${index}`}
+              key={`stop-${index}`}
               coordinate={{ latitude, longitude }}
-              pinColor="orange"
-            />
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={styles.busStopMarker}>
+                <Icon name="ellipse" size={14} color="#fff" />
+              </View>
+            </Marker>
           );
         })}
 
-        {/* Your Current Location */}
+        {/* Your Location Marker */}
         {location && (
           <Marker
             coordinate={{
               latitude: location.latitude,
               longitude: location.longitude,
             }}
-            pinColor="blue"
             title="You are here"
+            pinColor="blue"
           />
         )}
       </MapView>
-
-      {/* Bottom Transport Options */}
-      <View style={styles.transportBar}>
-        <TouchableOpacity style={styles.transportBtn}>
-          <Icon name="bus" size={22} color="#007aff" />
-          <Text style={styles.transportText}>Bus</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.transportBtn}>
-          <Icon name="train" size={22} color="#aaa" />
-          <Text style={styles.transportText}>Metro</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.transportBtn}>
-          <Icon name="car" size={22} color="#aaa" />
-          <Text style={styles.transportText}>Tram</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 };
@@ -182,19 +205,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     color: '#333',
+    marginTop: 30,
   },
   switchBtn: {
     backgroundColor: '#007aff',
     padding: 10,
     borderRadius: 10,
+    marginTop: 30,
   },
   map: {
     flex: 1,
   },
-  busStop: {
-    backgroundColor: '#007aff',
+  busStopMarker: {
+    backgroundColor: 'orange',
+    borderRadius: 10,
     padding: 5,
-    borderRadius: 15,
+  },
+  busIcon: {
+    backgroundColor: '#007aff',
+    borderRadius: 20,
+    padding: 6,
   },
   transportBar: {
     flexDirection: 'row',
