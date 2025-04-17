@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Dimensions, Image } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Dimensions, Image, SafeAreaView } from 'react-native';
 import MapView, { Polyline, Marker } from 'react-native-maps';
 import Icon from '@expo/vector-icons/Ionicons';
 
@@ -18,7 +18,7 @@ const App = () => {
   ];
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Top Input Section */}
       <View style={styles.inputContainer}>
         <TextInput style={styles.input} placeholder="Temple" placeholderTextColor="#333" />
@@ -73,7 +73,7 @@ const App = () => {
           <Text style={styles.transportText}>Tram</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -84,8 +84,8 @@ const styles = StyleSheet.create({
   inputContainer: {
     position: 'absolute',
     top: 40,
-    left: 20,
-    right: 20,
+    left: 0,
+    right: 0,
     zIndex: 1,
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -127,8 +127,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     flexDirection: 'row',
     justifyContent: 'space-around',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
     elevation: 10,
   },
   transportBtn: {

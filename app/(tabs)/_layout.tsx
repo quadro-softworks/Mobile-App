@@ -42,7 +42,7 @@ export default function TabLayout() {
         tabBarIcon: ({ color, focused }) => {
           let icon;
           switch (route.name) {
-            case 'bookmarks':
+            case 'favorites':
               icon = <Ionicons name="heart-outline" size={28} color={color} style={{marginBottom: -10}}/>;
               break;
             case 'map':
@@ -67,8 +67,8 @@ export default function TabLayout() {
             case 'profile':
               icon = <Ionicons name="person-outline" size={28} color={color} style={{marginBottom:-10}}/>;
               break;
-            case 'notifications':
-              icon = <Ionicons name="settings-outline" size={28} color={color} style={{marginBottom:-10}}/>;
+            case 'wallet':
+              icon = <Ionicons name="wallet-outline" size={28} color={color} style={{marginBottom:-10}}/>;
               break;
           }
           return icon;
@@ -76,11 +76,11 @@ export default function TabLayout() {
         tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: '#555',
       })}>
-      <Tabs.Screen name="bookmarks" options={{ title: 'Bookmarks' }} />
+      <Tabs.Screen name="favorites" options={{ title: 'Favorites' }} />
       <Tabs.Screen name="map" options={{ title: 'Map' }} />
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
+      <Tabs.Screen name="wallet" options={{ title: 'Wallet' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
-      <Tabs.Screen name="notifications" options={{ title: 'Settings' }} />
     </Tabs>
   );
 }

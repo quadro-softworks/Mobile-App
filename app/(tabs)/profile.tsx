@@ -1,306 +1,153 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Switch } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-
-import { Colors } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
-
-// Define setting item props
-type SettingItemProps = {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  subtitle?: string;
-  hasToggle?: boolean;
-  toggleValue?: boolean;
-  onToggle?: (value: boolean) => void;
-  onPress?: () => void;
-};
+import React from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Image,
+} from 'react-native';
+import Icon from '@expo/vector-icons/Ionicons';
 
 export default function ProfileScreen() {
-  const colorScheme = useColorScheme();
-  
-  // Mock user data
-  const [user, setUser] = useState({
-    name: 'Kidanu Teshome',
-    email: 'kidanu.t@example.com',
-    phone: '+251 91 234 5678',
-    profileImage: null, // Will use a placeholder for now
-    notificationsEnabled: true,
-    locationEnabled: true,
-    darkModeEnabled: colorScheme === 'dark',
-  });
-
-  // Toggle handler
-  const handleToggle = (setting: keyof typeof user) => (value: boolean) => {
-    setUser(prev => ({ ...prev, [setting]: value }));
-  };
-
-  // Setting item component
-  const SettingItem = ({
-    icon,
-    title,
-    subtitle,
-    hasToggle = false,
-    toggleValue = false,
-    onToggle,
-    onPress
-  }: SettingItemProps) => (
-    <TouchableOpacity 
-      style={styles.settingItem}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.settingIconContainer}>
-        <Ionicons name={icon} size={22} color="#0a7ea4" />
-      </View>
-      <View style={styles.settingTextContainer}>
-        <Text style={styles.settingTitle}>{title}</Text>
-        {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
-      </View>
-      {hasToggle ? (
-        <Switch
-          value={toggleValue}
-          onValueChange={onToggle}
-          trackColor={{ false: '#3a4356', true: '#0a7ea480' }}
-          thumbColor={toggleValue ? '#0a7ea4' : '#f0f0f0'}
-          ios_backgroundColor="#3a4356"
-        />
-      ) : (
-        <Ionicons name="chevron-forward" size={18} color="#adb5bd" />
-      )}
-    </TouchableOpacity>
-  );
-
   return (
-    <SafeAreaView style={styles.container}>
+    <ScrollView style={styles.container}>
+      {/* Profile Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Profile</Text>
+        <Image
+          source={{ uri: 'https://i.pravatar.cc/150?img=12' }}
+          style={styles.avatar}
+        />
+        <Text style={styles.name}>John Doe</Text>
+        <Text style={styles.email}>johndoe@example.com</Text>
         <TouchableOpacity style={styles.editButton}>
-          <Ionicons name="create-outline" size={22} color="white" />
+          <Icon name="pencil" size={16} color="#007aff" />
+          <Text style={styles.editButtonText}>Edit Profile</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Profile Card */}
-        <View style={styles.profileCard}>
-          <LinearGradient
-            colors={['#0a7ea4', '#086585']}
-            style={styles.profileImagePlaceholder}
-          >
-            <Text style={styles.profileInitials}>
-              {user.name.split(' ').map(n => n[0]).join('')}
-            </Text>
-          </LinearGradient>
-          <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
-          <Text style={styles.userPhone}>{user.phone}</Text>
+      {/* Info Cards */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Personal Information</Text>
+        <View style={styles.row}>
+          <Icon name="calendar" size={18} color="#888" />
+          <Text style={styles.rowText}>Date of Birth: Jan 1, 1990</Text>
         </View>
-
-        {/* Preferences Section */}
-        <View style={styles.settingsSection}>
-          <Text style={styles.sectionTitle}>Preferences</Text>
-          
-          <SettingItem
-            icon="notifications"
-            title="Notifications"
-            subtitle="Receive push notifications"
-            hasToggle
-            toggleValue={user.notificationsEnabled}
-            onToggle={handleToggle('notificationsEnabled')}
-          />
-          
-          <SettingItem
-            icon="location"
-            title="Location Services"
-            subtitle="Allow the app to access your location"
-            hasToggle
-            toggleValue={user.locationEnabled}
-            onToggle={handleToggle('locationEnabled')}
-          />
-          
-          <SettingItem
-            icon="moon"
-            title="Dark Mode"
-            subtitle="Switch between light and dark themes"
-            hasToggle
-            toggleValue={user.darkModeEnabled}
-            onToggle={handleToggle('darkModeEnabled')}
-          />
+        <View style={styles.row}>
+          <Icon name="map" size={18} color="#888" />
+          <Text style={styles.rowText}>Location: London, UK</Text>
         </View>
-
-        {/* Account Section */}
-        <View style={styles.settingsSection}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          
-          <SettingItem
-            icon="lock-closed"
-            title="Change Password"
-            onPress={() => {}}
-          />
-          
-          <SettingItem
-            icon="language"
-            title="Language"
-            subtitle="English"
-            onPress={() => {}}
-          />
-          
-          <SettingItem
-            icon="chatbubble"
-            title="Help & Support"
-            onPress={() => {}}
-          />
-          
-          <SettingItem
-            icon="information-circle"
-            title="About Guzo Sync"
-            onPress={() => {}}
-          />
+        <View style={styles.row}>
+          <Icon name="map" size={18} color="#888" />
+          <Text style={styles.rowText}>+2519 85316396</Text>
         </View>
+      </View>
 
-        {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutButton}>
-          <Ionicons name="log-out" size={18} color="#e74c3c" />
-          <Text style={styles.logoutText}>Log Out</Text>
+      {/* Settings Card */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Settings</Text>
+        <TouchableOpacity style={styles.row}>
+          <Icon name="bell" size={18} color="#888" />
+          <Text style={styles.rowText}>Notifications</Text>
         </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+        <TouchableOpacity style={styles.row}>
+          <Icon name="locker" size={18} color="#888" />
+          <Text style={styles.rowText}>Privacy & Security</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.row}>
+          <Icon name="moon" size={18} color="#888" />
+          <Text style={styles.rowText}>Appearance</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Logout Button */}
+      <TouchableOpacity style={styles.logoutButton}>
+        <Icon name="logout" size={18} color="#fff" />
+        <Text style={styles.logoutText}>Log Out</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: '#1c242f',
+    backgroundColor: '#f9f9f9',
+    paddingHorizontal: 20,
+    paddingTop: 50,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    marginBottom: 30,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
+  avatar: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    marginBottom: 10,
+  },
+  name: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+  },
+  email: {
+    fontSize: 14,
+    color: '#888',
+    marginBottom: 10,
   },
   editButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-  },
-  profileCard: {
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: '#28313f',
-    marginBottom: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  profileImagePlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  profileInitials: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 6,
-  },
-  userEmail: {
-    fontSize: 16,
-    color: '#adb5bd',
-    marginBottom: 4,
-  },
-  userPhone: {
-    fontSize: 16,
-    color: '#adb5bd',
-  },
-  settingsSection: {
-    marginBottom: 20,
-    backgroundColor: '#28313f',
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: 'white',
-    padding: 16,
-    paddingBottom: 8,
-  },
-  settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: '#e6f0ff',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  settingIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(10, 126, 164, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
+  editButtonText: {
+    color: '#007aff',
+    fontSize: 13,
+    marginLeft: 6,
   },
-  settingTextContainer: {
-    flex: 1,
+  card: {
+    backgroundColor: '#fff',
+    padding: 18,
+    borderRadius: 14,
+    marginBottom: 20,
+    elevation: 1,
+    shadowColor: '#aaa',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  settingTitle: {
-    fontSize: 16,
-    color: 'white',
-  },
-  settingSubtitle: {
-    fontSize: 14,
-    color: '#adb5bd',
-    marginTop: 2,
-  },
-  logoutButton: {
-    padding: 16,
-    backgroundColor: '#28313f',
-    borderRadius: 16,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-    marginBottom: 40,
-  },
-  logoutText: {
+  cardTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#e74c3c',
+    marginBottom: 12,
+    color: '#333',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  rowText: {
+    marginLeft: 10,
+    fontSize: 14,
+    color: '#555',
+  },
+  logoutButton: {
+    backgroundColor: '#007aff',
+    paddingVertical: 14,
+    borderRadius: 14,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 40,
+    marginTop: 10,
+  },
+  logoutText: {
+    color: '#fff',
+    fontSize: 16,
     marginLeft: 8,
   },
-}); 
+});
