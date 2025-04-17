@@ -154,21 +154,7 @@ const App = () => {
         )}
       </MapView>
 
-      {/* Bottom Transport Options */}
-      <View style={styles.transportBar}>
-        <TouchableOpacity style={styles.transportBtn}>
-          <Icon name="bus" size={22} color="#007aff" />
-          <Text style={styles.transportText}>Bus</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.transportBtn}>
-          <Icon name="train" size={22} color="#aaa" />
-          <Text style={styles.transportText}>Metro</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.transportBtn}>
-          <Icon name="car" size={22} color="#aaa" />
-          <Text style={styles.transportText}>Tram</Text>
-        </TouchableOpacity>
-      </View>
+      
     </SafeAreaView>
   );
 };
