@@ -8,8 +8,19 @@ import {
   Image,
 } from 'react-native';
 import Icon from '@expo/vector-icons/Ionicons';
+import { useAuth } from '@/providers/AuthProvider';
 
 export default function ProfileScreen() {
+  const { signOut, user } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Logout failed', error);
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
       {/* Profile Header */}
@@ -18,8 +29,8 @@ export default function ProfileScreen() {
           source={{ uri: 'https://i.pravatar.cc/150?img=12' }}
           style={styles.avatar}
         />
-        <Text style={styles.name}>John Doe</Text>
-        <Text style={styles.email}>johndoe@example.com</Text>
+        <Text style={styles.name}>{user?.displayName || 'John Doe'}</Text>
+        <Text style={styles.email}>{user?.email || 'johndoe@example.com'}</Text>
         <TouchableOpacity style={styles.editButton}>
           <Icon name="pencil" size={16} color="#007aff" />
           <Text style={styles.editButtonText}>Edit Profile</Text>
@@ -38,7 +49,7 @@ export default function ProfileScreen() {
           <Text style={styles.rowText}>Location: London, UK</Text>
         </View>
         <View style={styles.row}>
-          <Icon name="map" size={18} color="#888" />
+          <Icon name="call" size={18} color="#888" />
           <Text style={styles.rowText}>+2519 85316396</Text>
         </View>
       </View>
@@ -47,11 +58,11 @@ export default function ProfileScreen() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Settings</Text>
         <TouchableOpacity style={styles.row}>
-          <Icon name="bell" size={18} color="#888" />
+          <Icon name="notifications" size={18} color="#888" />
           <Text style={styles.rowText}>Notifications</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.row}>
-          <Icon name="locker" size={18} color="#888" />
+          <Icon name="lock-closed" size={18} color="#888" />
           <Text style={styles.rowText}>Privacy & Security</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.row}>
@@ -61,8 +72,8 @@ export default function ProfileScreen() {
       </View>
 
       {/* Logout Button */}
-      <TouchableOpacity style={styles.logoutButton}>
-        <Icon name="logout" size={18} color="#fff" />
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <Icon name="log-out" size={18} color="#fff" />
         <Text style={styles.logoutText}>Log Out</Text>
       </TouchableOpacity>
     </ScrollView>
