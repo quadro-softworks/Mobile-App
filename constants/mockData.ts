@@ -110,8 +110,8 @@ export const generateFeedback = (count = 5) => {
   }));
 };
 
-// Generate user profile
-export const generateUserProfile = () => {
+// Generate user profile with role
+export const generateUserProfile = (role = 'PASSENGER') => {
   return {
     id: 'user-1',
     name: faker.person.fullName(),
@@ -131,8 +131,61 @@ export const generateUserProfile = () => {
       { length: Math.floor(Math.random() * 3) + 1 },
       (_, i) => `R${i + 1}`
     ),
+    role,
   };
 };
+
+// Example mock users for testing roles
+export const mockUsers = [
+  {
+    id: 'user-passenger',
+    name: 'Passenger User',
+    email: 'passenger@example.com',
+    password: 'pass123',
+    phone: '0911000001',
+    language: 'en',
+    notificationSettings: {
+      pushEnabled: true,
+      emailEnabled: true,
+      alertTypes: ['delay', 'route-change', 'service-disruption'],
+    },
+    favoriteStops: ['stop-1', 'stop-2'],
+    favoriteRoutes: ['R1', 'R2'],
+    role: 'PASSENGER',
+  },
+  {
+    id: 'user-driver',
+    name: 'Driver User',
+    email: 'driver@example.com',
+    password: 'driver123',
+    phone: '0911000002',
+    language: 'en',
+    notificationSettings: {
+      pushEnabled: true,
+      emailEnabled: true,
+      alertTypes: ['delay', 'route-change', 'service-disruption'],
+    },
+    favoriteStops: [],
+    favoriteRoutes: [],
+    role: 'DRIVE',
+  },
+  {
+    id: 'user-regulator',
+    name: 'Regulator User',
+    email: 'regulator@example.com',
+    password: 'regulator123',
+    phone: '0911000003',
+    language: 'en',
+    notificationSettings: {
+      pushEnabled: true,
+      emailEnabled: true,
+      alertTypes: ['delay', 'route-change', 'service-disruption'],
+    },
+    favoriteStops: [],
+    favoriteRoutes: [],
+    role: 'QUEUE_REGULATOR',
+  },
+];
 
 // Initial data
 export const initialData = {

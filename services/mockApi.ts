@@ -1,4 +1,4 @@
-import { initialData } from '@/constants/mockData';
+import { initialData, mockUsers } from '@/constants/mockData';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Define types for our mock data store
@@ -28,7 +28,7 @@ interface MockSession {
 // In-memory data store
 let mockDataStore = {
   ...initialData,
-  users: [] as MockUser[],
+  users: [...mockUsers], // Initialize with mock users for login
   sessions: [] as MockSession[],
 };
 

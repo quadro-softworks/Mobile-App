@@ -5,6 +5,8 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore } from "@/stores/authStore";
+import { View, Text } from "react-native";
+import { useRouter } from 'expo-router';
 
 export const unstable_settings = {
   initialRouteName: "(tabs)",
@@ -43,12 +45,27 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
+  const user = useAuthStore((state) => state.user);
+  const router = useRouter();
+
+  // Redirect to the correct tab group based on role
+  useEffect(() => {
+    if (user?.role === 'DRIVE') {
+      router.replace('/(drivertabs)');
+    } else if (user?.role === 'QUEUE_REGULATOR') {
+      router.replace('/(regulatortabs)');
+    }
+    // PASSENGER and others stay in (tabs)
+  }, [user, router]);
+
   return (
     <>
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(drivertabs)" />
+        <Stack.Screen name="(regulatortabs)" />
         <Stack.Screen 
           name="bus/[id]" 
           options={{ 
