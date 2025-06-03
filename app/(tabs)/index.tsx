@@ -6,7 +6,6 @@ import { useBusStore } from '@/stores/busStore';
 import { BusCard } from '@/components/BusCard';
 import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
-import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { Bus } from '@/types';
 
@@ -51,15 +50,6 @@ export default function MapScreen() {
           <View style={styles.header}>
             <Text style={styles.title}>Live Bus Tracking</Text>
             <Text style={styles.subtitle}>Find and track buses in real-time</Text>
-          </View>
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" color={colors.gray} size={20} style={styles.searchIcon} />
-            <Input
-              placeholder="Search for bus or route"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              style={styles.searchInput}
-            />
           </View>
         </View>
       )}
@@ -153,25 +143,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: colors.text,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    marginBottom: 16, // Added margin bottom for spacing
-    borderColor: colors.border, // Added border color
-    borderWidth: 1, // Added border width
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: 48, // Increased height for better touch target
-    fontSize: 16,
-    color: colors.text, // Ensure text color is appropriate
   },
   mapContainer: {
     height: 250, // Default height for the map
