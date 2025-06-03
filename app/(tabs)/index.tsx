@@ -1,232 +1,246 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  FlatList,
-  Image,
-} from 'react-native';
-import { Ionicons, MaterialIcons, Entypo } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, Text, FlatList, TouchableOpacity, Platform, SafeAreaView } from 'react-native';
+import { WebView } from 'react-native-webview';
+import { useRouter } from 'expo-router';
+import { useBusStore } from '@/stores/busStore';
+import { BusCard } from '@/components/BusCard';
+import { colors } from '@/constants/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { Input } from '@/components/ui/Input';
+import { Card } from '@/components/ui/Card';
+import { Bus } from '@/types';
 
-const trips = [
-  {
-    id: '1',
-    title: 'Bus № 31',
-    from: '72-74 Oxford St.',
-    to: '20 Grosvenor Sq.',
-    price: '£10.00',
-  },
-  {
-    id: '2',
-    title: 'Central Line',
-    from: 'Great Portland St.',
-    to: 'Baker Street',
-    price: '£5.00',
-  },
-  {
-    id: '3',
-    title: 'Bus № 79',
-    from: '103 Seymour Pl.',
-    to: 'London NW1 5BR',
-    price: '£7.00',
-  },
-  {
-    id: '4',
-    title: 'Tram № 17',
-    from: '377 Durnsford Rd.',
-    to: '136 Buckhold Rd.',
-    price: '£4.00',
-  },
-  {
-    id: '5',
-    title: 'Tram № 9',
-    from: 'Sample St.',
-    to: 'Sample End.',
-    price: '£6.00',
-  },
-  {
-    id: '6',
-    title: 'Bus № 90',
-    from: 'Start Rd.',
-    to: 'Finish Lane.',
-    price: '£8.00',
-  },
-];
-
-export default function HomeScreen() {
+export default function MapScreen() {
+  const router = useRouter();
+  const { buses, fetchBuses, isLoading } = useBusStore();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredBuses, setFilteredBuses] = useState<Bus[]>([]);
+  const [isMapFullScreen, setMapFullScreen] = useState(false);
+  
+  useEffect(() => {
+    fetchBuses();
+  }, [fetchBuses]);
+  
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredBuses(buses);
+    } else {
+      const query = searchQuery.toLowerCase();
+      const filtered = buses.filter(
+        bus => 
+          bus.name.toLowerCase().includes(query) || 
+          bus.routeName.toLowerCase().includes(query)
+      );
+      setFilteredBuses(filtered);
+    }
+  }, [buses, searchQuery]);
+  
+  const handleBusPress = (bus: Bus) => {
+    router.push(`/bus/${bus.id}`);
+  };
+  
+  const toggleMapFullScreen = () => {
+    setMapFullScreen(!isMapFullScreen);
+  };
+  
   return (
-    <ScrollView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.userInfo}>
-          <Image
-            source={{
-              uri: 'https://randomuser.me/api/portraits/men/1.jpg',
-            }}
-            style={styles.avatar}
-          />
-          <Text style={styles.welcome}>Hey, Michael</Text>
-        </View>
-        <Ionicons name="notifications-outline" size={24} color="#000" />
-      </View>
-
-      {/* Pass Card */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>LondonRide</Text>
-          <Entypo name="dots-three-horizontal" size={18} color="#fff" />
-        </View>
-        <View style={styles.cardRow}>
-          <View>
-            <Text style={styles.cardLabel}>Balance</Text>
-            <Text style={styles.cardValue}>£5.00</Text>
+    <SafeAreaView style={styles.safeAreaContainer}>
+      {/* Header and Search are part of the normal view, overlaid by fullscreen map */}
+      {!isMapFullScreen && (
+        <View style={styles.headerSearchContainerPadded}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Live Bus Tracking</Text>
+            <Text style={styles.subtitle}>Find and track buses in real-time</Text>
           </View>
-          <View>
-            <Text style={styles.cardLabel}>Pass id</Text>
-            <Text style={styles.cardValue}>798 014</Text>
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" color={colors.gray} size={20} style={styles.searchIcon} />
+            <Input
+              placeholder="Search for bus or route"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={styles.searchInput}
+            />
           </View>
         </View>
+      )}
+      
+      {/* Map View - Now using WebView for Mapbox */}
+      <View style={isMapFullScreen ? styles.mapContainerFullScreen : styles.mapContainer}>
+        <WebView
+          source={{
+            html: `<!DOCTYPE html>
+              <html>
+              <head>
+                <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                <style>html, body, #map { height: 100%; margin: 0; padding: 0; }</style>
+                <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+              </head>
+              <body>
+                <div id='map' style='width:100vw;height:100vh;'></div>
+                <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+                <script>
+                  mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
+                  const map = new mapboxgl.Map({
+                    container: 'map',
+                    style: 'mapbox://styles/mapbox/streets-v11',
+                    center: [38.7578, 9.0301], // Example: Addis Ababa
+                    zoom: 12
+                  });
+                </script>
+              </body>
+              </html>`
+          }}
+          style={{ flex: 1 }}
+          originWhitelist={["*"]}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+        />
+        <TouchableOpacity onPress={toggleMapFullScreen} style={styles.fullScreenButton}>
+          {isMapFullScreen ? <Ionicons name="contract" color={colors.primary} size={24}/> : <Ionicons name="expand" color={colors.primary} size={24}/>} 
+        </TouchableOpacity>
       </View>
-
-      {/* Add new pass */}
-      <TouchableOpacity style={styles.addPass}>
-        <Text style={styles.addPassText}>Add new pass</Text>
-        <Ionicons name="add-circle-outline" size={18} color="#007AFF" />
-      </TouchableOpacity>
-
-      {/* Last Trips Header */}
-      <View style={styles.tripsHeader}>
-        <Text style={styles.sectionTitle}>Your last trips</Text>
-        <MaterialIcons name="menu" size={20} color="#000" />
-      </View>
-
-      {/* Trips List */}
-      <View style={styles.tripsContainer}>
-        {trips.map((trip) => (
-          <View key={trip.id} style={styles.tripCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-              <Ionicons name="bus" size={18} color="#007AFF" />
-              <Text style={styles.tripTitle}>{trip.title}</Text>
-            </View>
-            <Text style={styles.tripDetail}>↘ From: {trip.from}</Text>
-            <Text style={styles.tripDetail}>↗ To: {trip.to}</Text>
-            <Text style={styles.tripPrice}>Price: {trip.price}</Text>
+      
+      {/* Bus List - Only shown when map is not fullscreen */}
+      {!isMapFullScreen && (
+        <View style={styles.listContainerPadded}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Nearby Buses</Text>
+            <TouchableOpacity onPress={() => router.push('/all-buses')}>
+              <Text style={styles.viewAllText}>View All</Text>
+            </TouchableOpacity>
           </View>
-        ))}
-      </View>
-    </ScrollView>
+          {isLoading ? (
+            <Text style={styles.loadingText}>Loading buses...</Text>
+          ) : filteredBuses.length > 0 ? (
+            <FlatList
+              data={filteredBuses.slice(0, 3)} // Show only first 3 buses
+              renderItem={({ item }) => (
+                <BusCard bus={item} onPress={() => handleBusPress(item)} />
+              )}
+              keyExtractor={(item) => item.id.toString()}
+              showsVerticalScrollIndicator={false}
+            />
+          ) : (
+            <Text style={styles.noBusesText}>No buses found matching your search.</Text>
+          )}
+        </View>
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#f9f9f9',
+  safeAreaContainer: { // New style for SafeAreaView
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  headerSearchContainerPadded: { // New style for padding header and search
     paddingHorizontal: 16,
-    paddingTop: 50,
+  },
+  listContainerPadded: { // New style for padding list
+    paddingHorizontal: 16,
+    flex: 1, // Ensure list takes remaining space when map is not fullscreen
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+    paddingVertical: Platform.OS === 'ios' ? 20 : 24, // Adjusted padding for iOS/Android
   },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginBottom: 4,
   },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  welcome: {
+  subtitle: {
     fontSize: 16,
-    fontWeight: '600',
+    color: colors.text,
   },
-  card: {
-    backgroundColor: '#007AFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  cardRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  cardLabel: {
-    color: '#b3d6ff',
-    fontSize: 12,
-  },
-  cardValue: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '600',
-  },
-  addPass: {
+  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    alignSelf: 'center',
-    marginVertical: 12,
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 16, // Added margin bottom for spacing
+    borderColor: colors.border, // Added border color
+    borderWidth: 1, // Added border width
   },
-  addPassText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '500',
+  searchIcon: {
+    marginRight: 8,
   },
-  tripsHeader: {
+  searchInput: {
+    flex: 1,
+    height: 48, // Increased height for better touch target
+    fontSize: 16,
+    color: colors.text, // Ensure text color is appropriate
+  },
+  mapContainer: {
+    height: 250, // Default height for the map
+    marginHorizontal: 16, // Add horizontal margin to match padding of other elements
+    borderRadius: 12, // Rounded corners for the map container
+    overflow: 'hidden', // Ensures the MapView respects the border radius
+    marginBottom: 16, // Space below the map before the list starts
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  mapContainerFullScreen: {
+    ...StyleSheet.absoluteFillObject, // Make map take up the whole screen
+    zIndex: 10, // Ensure map is on top of other content when fullscreen
+  },
+  fullScreenButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)', // Semi-transparent white
+    padding: 8,
+    borderRadius: 20, // Circular button
+    zIndex: 11, // Ensure button is on top of the map
+  },
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    alignItems: 'center',
+    marginTop: 20, // Increased top margin for better separation
+    marginBottom: 12, // Increased bottom margin
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 20, // Slightly larger section title
+    fontWeight: 'bold',
+    color: colors.text,
   },
-  tripsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    justifyContent: 'space-between',
-    marginBottom: 40,
-  },
-  tripCard: {
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 12,
-    width: '47%',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  tripTitle: {
-    fontWeight: '600',
+  viewAllText: {
     fontSize: 14,
-    marginLeft: 6,
-    color: '#333',
+    color: colors.primary,
+    fontWeight: '600', // Bolder view all text
   },
-  tripDetail: {
-    fontSize: 12,
-    color: '#666',
+  loadingText: {
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 16,
+    color: colors.gray,
   },
-  tripPrice: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 4,
-    color: '#000',
+  noBusesText: {
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 16,
+    color: colors.gray,
+  },
+  routeCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    marginBottom: 12,
+    backgroundColor: colors.card, // Ensure card background is applied
+    borderRadius: 8, // Ensure card has rounded corners
+  },
+  routeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  routeName: {
+    fontSize: 16,
+    marginLeft: 12,
+    color: colors.text,
+    fontWeight: '500',
   },
 });
