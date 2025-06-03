@@ -1,25 +1,25 @@
 // App color palette
 export const colors = {
     // Main brand colors
-    primary: '#F59E0B', // Orange
-    secondary: '#FFB300', // Lighter orange
+    primary: '#2563EB', // Blue-600
+    secondary: '#3B82F6', // Blue-500
     
     // Background colors
-    background: '#FFF8F1', // Very light orange background
+    background: '#F0F6FF', // Very light blue background
     card: '#FFFFFF', // Pure white for cards
     
     // Text colors
-    text: '#7C4700', // Deep orange-brown for primary text
-    textSecondary: '#B26A00', // Medium orange for secondary text
+    text: '#1E293B', // Slate-800 for primary text
+    textSecondary: '#64748B', // Slate-500 for secondary text
     
     // UI element colors
-    border: '#FFE0B2', // Light orange for borders
-    inactive: '#FFD699', // Lighter orange for inactive elements
-    highlight: '#FFF3E0', // Very light orange for highlights
-    gray: '#9CA3AF', // Gray for icons and secondary elements
+    border: '#DBEAFE', // Blue-100 for borders
+    inactive: '#BFDBFE', // Blue-200 for inactive elements
+    highlight: '#EFF6FF', // Blue-50 for highlights
+    gray: '#94A3B8', // Slate-400 for icons and secondary elements
     
     // Status colors
-    success: '#10B981', // Green for success states
-    error: '#EF4444', // Red for error states
-    warning: '#F59E0B', // Amber for warning states
+    success: '#22C55E', // Green-500 for success states
+    error: '#EF4444', // Red-500 for error states
+    warning: '#F59E0B', // Amber-500 for warning states
   };
