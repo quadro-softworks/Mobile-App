@@ -69,7 +69,7 @@ export default function MapScreen() {
                 <div id='map' style='width:100vw;height:100vh;'></div>
                 <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
                 <script>
-                  mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
+                  mapboxgl.accessToken = 'pk.eyJ1IjoiYmFza2V0bzEyMyIsImEiOiJjbTlqZWVsdzQwZWs5MmtyMDN0b29jMjU1In0.CUIyg0uNKnAfe55aXJ0bBA';
                   const map = new mapboxgl.Map({
                     container: 'map',
                     style: 'mapbox://styles/mapbox/streets-v11',
