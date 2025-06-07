@@ -1,116 +1,55 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { useRouter, Link } from 'expo-router';
-import { useAuthStore } from '@/stores/authStore';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { colors } from '@/constants/colors';
-import { Ionicons, FontAwesome } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuthStore } from '@/stores/authStore';
 
 export default function RegisterScreen() {
-  const [name, setName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
-  const [nameError, setNameError] = useState('');
-  const [emailError, setEmailError] = useState('');
-  const [phoneError, setPhoneError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [confirmPasswordError, setConfirmPasswordError] = useState('');
-  
+  const [role, setRole] = useState<'PASSENGER' | 'DRIVE' | 'QUEUE_REGULATOR'>('PASSENGER');
+  const [error, setError] = useState('');
+
   const router = useRouter();
-  const { register, isLoading, error, user, clearError } = useAuthStore();
+  const { register, isLoading } = useAuthStore();
 
-  const mailIcon = useMemo(() => <Ionicons name="mail" size={20} color={colors.textSecondary} />, [colors.textSecondary]);
-  const userIcon = useMemo(() => <Ionicons name="person" size={20} color={colors.textSecondary} />, [colors.textSecondary]);
-  const phoneIcon = useMemo(() => <Ionicons name="call" size={20} color={colors.textSecondary} />, [colors.textSecondary]);
-  const lockIcon = useMemo(() => <Ionicons name="lock-closed" size={20} color={colors.textSecondary} />, [colors.textSecondary]);
-
-  useEffect(() => {
-    // If user is already logged in, redirect to home
-    if (user) {
-      router.replace('/(tabs)');
-    }
-  }, [user, router]);
-  
   const validateForm = () => {
-    let isValid = true;
-    
-    // Validate name
-    if (!name) {
-      setNameError('Name is required');
-      isValid = false;
-    } else {
-      setNameError('');
-    }
-    
-    // Validate email
-    if (!email) {
-      setEmailError('Email is required');
-      isValid = false;
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
-      setEmailError('Email is invalid');
-      isValid = false;
-    } else {
-      setEmailError('');
-    }
-    
-    // Validate phone (optional)
-    if (phone && !/^\+?[0-9]{10,15}$/.test(phone)) {
-      setPhoneError('Phone number is invalid');
-      isValid = false;
-    } else {
-      setPhoneError('');
-    }
-    
-    // Validate password
-    if (!password) {
-      setPasswordError('Password is required');
-      isValid = false;
-    } else if (password.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
-      isValid = false;
-    } else {
-      setPasswordError('');
-    }
-    
-    // Validate confirm password
-    if (!confirmPassword) {
-      setConfirmPasswordError('Please confirm your password');
-      isValid = false;
-    } else if (password !== confirmPassword) {
-      setConfirmPasswordError('Passwords do not match');
-      isValid = false;
-    } else {
-      setConfirmPasswordError('');
-    }
-    
-    return isValid;
+    if (!firstName) return setError('First name is required'), false;
+    if (!lastName) return setError('Last name is required'), false;
+    if (!email) return setError('Email is required'), false;
+    if (!/\S+@\S+\.\S+/.test(email)) return setError('Email is invalid'), false;
+    if (!password) return setError('Password is required'), false;
+    if (password.length < 6) return setError('Password must be at least 6 characters'), false;
+    if (password !== confirmPassword) return setError('Passwords do not match'), false;
+    setError('');
+    return true;
   };
-  
+
   const handleRegister = async () => {
-    clearError();
-    
-    if (validateForm()) {
-      await register({
-        name,
-        email,
-        phone,
-        password,
-        language: 'en',
-        notificationSettings: {
-          pushEnabled: true,
-          emailEnabled: true,
-          alertTypes: ['delay', 'route-change', 'service-disruption'],
-        },
-        favoriteStops: [],
-        favoriteRoutes: [],
-      });
+    if (!validateForm()) return;
+    setError('');
+    await register({
+      first_name: firstName,
+      last_name: lastName,
+      email,
+      password,
+      role,
+      phone_number: phone,
+      profile_image: '',
+    });
+    if (!error) {
+      Alert.alert('Success', 'Registration successful! Please log in.');
+      router.replace('/login');
     }
   };
-  
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -128,26 +67,28 @@ export default function RegisterScreen() {
           />
           <Text style={styles.appName}>Guzo Sync</Text>
         </View>
-        
         <View style={styles.formContainer}>
           <Text style={styles.title}>Create Account</Text>
           <Text style={styles.subtitle}>Sign up to get started</Text>
-          
-          {error && (
+          {error ? (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{error}</Text>
             </View>
-          )}
-          
+          ) : null}
           <Input
-            label="Full Name"
-            placeholder="Enter your full name"
-            value={name}
-            onChangeText={setName}
-            error={nameError}
-            leftIcon={userIcon}
+            label="First Name"
+            placeholder="Enter your first name"
+            value={firstName}
+            onChangeText={setFirstName}
+            leftIcon={<Ionicons name="person" size={20} color={colors.textSecondary} />}
           />
-
+          <Input
+            label="Last Name"
+            placeholder="Enter your last name"
+            value={lastName}
+            onChangeText={setLastName}
+            leftIcon={<Ionicons name="person" size={20} color={colors.textSecondary} />}
+          />
           <Input
             label="Email"
             placeholder="Enter your email"
@@ -155,47 +96,52 @@ export default function RegisterScreen() {
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
-            error={emailError}
-            leftIcon={mailIcon}
+            leftIcon={<Ionicons name="mail" size={20} color={colors.textSecondary} />}
           />
-
           <Input
             label="Phone (Optional)"
             placeholder="Enter your phone number"
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
-            error={phoneError}
-            leftIcon={phoneIcon}
+            leftIcon={<Ionicons name="call" size={20} color={colors.textSecondary} />}
           />
-
           <Input
             label="Password"
             placeholder="Create a password"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
-            error={passwordError}
-            leftIcon={lockIcon}
+            leftIcon={<Ionicons name="lock-closed" size={20} color={colors.textSecondary} />}
           />
-
           <Input
             label="Confirm Password"
             placeholder="Confirm your password"
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
-            error={confirmPasswordError}
-            leftIcon={lockIcon}
+            leftIcon={<Ionicons name="lock-closed" size={20} color={colors.textSecondary} />}
           />
-          
+          <View style={{ marginVertical: 12 }}>
+            <Text style={{ color: colors.text, fontWeight: '500', marginBottom: 4 }}>Role</Text>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity onPress={() => setRole('PASSENGER')} style={{ padding: 8, borderWidth: 1, borderColor: role === 'PASSENGER' ? colors.primary : colors.border, borderRadius: 8, backgroundColor: role === 'PASSENGER' ? colors.primary : colors.card }}>
+                <Text style={{ color: role === 'PASSENGER' ? colors.card : colors.text }}>Passenger</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setRole('DRIVE')} style={{ padding: 8, borderWidth: 1, borderColor: role === 'DRIVE' ? colors.primary : colors.border, borderRadius: 8, backgroundColor: role === 'DRIVE' ? colors.primary : colors.card }}>
+                <Text style={{ color: role === 'DRIVE' ? colors.card : colors.text }}>Driver</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setRole('QUEUE_REGULATOR')} style={{ padding: 8, borderWidth: 1, borderColor: role === 'QUEUE_REGULATOR' ? colors.primary : colors.border, borderRadius: 8, backgroundColor: role === 'QUEUE_REGULATOR' ? colors.primary : colors.card }}>
+                <Text style={{ color: role === 'QUEUE_REGULATOR' ? colors.card : colors.text }}>Regulator</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
           <Button
             title="Sign Up"
             onPress={handleRegister}
             loading={isLoading}
             style={styles.button}
           />
-          
           <View style={styles.loginContainer}>
             <Text style={styles.loginText}>Already have an account? </Text>
             <Link href="/login" asChild>

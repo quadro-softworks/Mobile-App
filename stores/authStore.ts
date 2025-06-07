@@ -26,8 +26,17 @@ export const useAuthStore = create<AuthStore>()(
       register: async (userData) => {
         set({ isLoading: true, error: null });
         try {
-          const { token, user } = await authApi.register(userData);
-          set({ user, token, isLoading: false });
+          const res = await fetch('https://guzosync-fastapi.onrender.com/api/accounts/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(userData),
+          });
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.detail || 'Registration failed');
+          }
+          // Registration successful, but backend may not return user/token
+          set({ isLoading: false });
         } catch (error) {
           set({ error: (error as Error).message, isLoading: false });
         }
@@ -36,8 +45,18 @@ export const useAuthStore = create<AuthStore>()(
       login: async (credentials) => {
         set({ isLoading: true, error: null });
         try {
-          const { token, user } = await authApi.login(credentials);
-          set({ user, token, isLoading: false });
+          const res = await fetch('https://guzosync-fastapi.onrender.com/api/accounts/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(credentials),
+          });
+          if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.detail || 'Login failed');
+          }
+          const data = await res.json();
+          console.log('Login response:', data);
+          set({ user: data.user, token: data.token, isLoading: false });
         } catch (error) {
           set({ error: (error as Error).message, isLoading: false });
         }
