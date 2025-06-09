@@ -58,20 +58,6 @@ export default function RequestsScreen() {
       icon: 'people',
       color: colors.warning,
     },
-    {
-      id: 'stop_issue',
-      title: 'Report Stop Issue',
-      description: 'Safety concerns, maintenance needs, or other stop issues',
-      icon: 'warning',
-      color: colors.error,
-    },
-    {
-      id: 'assistance',
-      title: 'Request Assistance',
-      description: 'General assistance or support needed',
-      icon: 'help-circle',
-      color: colors.textSecondary,
-    },
   ];
 
   // Mock requests data
@@ -92,15 +78,6 @@ export default function RequestsScreen() {
       status: 'accepted',
       timestamp: '2024-01-15T09:15:00Z',
       response: 'Additional bus dispatched to your location. ETA: 5 minutes.',
-    },
-    {
-      id: '3',
-      type: 'stop_issue',
-      title: 'Stop Maintenance Issue',
-      description: 'Broken bench and damaged shelter at Stadium stop',
-      status: 'accepted',
-      timestamp: '2024-01-14T16:45:00Z',
-      response: 'Maintenance team scheduled for tomorrow morning.',
     },
   ];
 
