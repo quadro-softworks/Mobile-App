@@ -11,7 +11,7 @@ import { Notification } from '@/types';
 
 export default function NotificationSettingsScreen() {
   const router = useRouter();
-  const { notifications, fetchNotifications, markNotificationAsRead, isLoading } = useNotificationStore();
+  const { notifications, fetchNotifications, markNotificationAsRead, markAllAsRead, isLoading } = useNotificationStore();
   const { user, updateNotificationSettings } = useAuthStore();
   
   useEffect(() => {
@@ -23,7 +23,7 @@ export default function NotificationSettingsScreen() {
   };
   
   const handleNotificationPress = (notification: Notification) => {
-    if (!notification.read) {
+    if (!notification.read && !notification.is_read) {
       markNotificationAsRead(notification.id);
     }
   };
@@ -104,8 +104,18 @@ export default function NotificationSettingsScreen() {
         </View>
         
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Notifications</Text>
-          
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Notifications</Text>
+            {notifications.length > 0 && (
+              <TouchableOpacity
+                style={styles.markAllButton}
+                onPress={markAllAsRead}
+              >
+                <Text style={styles.markAllText}>Mark All Read</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           {notifications.length > 0 ? (
             <Card style={styles.notificationsCard}>
               {notifications.map((notification) => (
@@ -120,8 +130,8 @@ export default function NotificationSettingsScreen() {
             <Card>
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>
-                  {isLoading 
-                    ? 'Loading notifications...' 
+                  {isLoading
+                    ? 'Loading notifications...'
                     : 'No notifications available'}
                 </Text>
               </View>
@@ -188,5 +198,22 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: colors.textSecondary,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  markAllButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+  },
+  markAllText: {
+    fontSize: 14,
+    color: colors.card,
+    fontWeight: '500',
   },
 });

@@ -1,19 +1,24 @@
-import React, { useEffect } from 'react';
-import { View, StyleSheet, Text, FlatList, TouchableOpacity, SafeAreaView, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, Text, FlatList, TouchableOpacity, SafeAreaView, Platform, SectionList } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAlertStore } from '@/stores/alertStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { AlertCard } from '@/components/AlertCard';
+import { NotificationItem } from '@/components/NotificationItem';
 import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
-import { Alert } from '@/types';
+import { Alert, Notification } from '@/types';
 
 export default function AlertsScreen() {
   const router = useRouter();
-  const { alerts, fetchAlerts, markAlertAsRead, isLoading } = useAlertStore();
-  
+  const { alerts, fetchAlerts, markAlertAsRead, isLoading: alertsLoading } = useAlertStore();
+  const { notifications, fetchNotifications, markNotificationAsRead, isLoading: notificationsLoading } = useNotificationStore();
+  const [activeTab, setActiveTab] = useState<'alerts' | 'notifications'>('alerts');
+
   useEffect(() => {
     fetchAlerts();
-  }, [fetchAlerts]);
+    fetchNotifications();
+  }, [fetchAlerts, fetchNotifications]);
   
   const handleAlertPress = (alert: Alert) => {
     // Mark alert as read when opened
@@ -22,28 +27,39 @@ export default function AlertsScreen() {
     }
     router.push(`/alert/${alert.id}`);
   };
-  
+
+  const handleNotificationPress = (notification: Notification) => {
+    if (!notification.read && !notification.is_read) {
+      markNotificationAsRead(notification.id);
+    }
+  };
+
   const handleCreateAlert = () => {
     // Navigate to create alert screen
     // This would be implemented in a real app
     alert('Create alert functionality would be implemented here');
   };
+
+  const unreadAlertsCount = alerts.filter(alert => !alert.read).length;
+  const unreadNotificationsCount = notifications.filter(notification => !notification.read && !notification.is_read).length;
   
-  const unreadCount = alerts.filter(alert => !alert.read).length;
-  
+  const currentData = activeTab === 'alerts' ? alerts : notifications;
+  const currentLoading = activeTab === 'alerts' ? alertsLoading : notificationsLoading;
+  const currentUnreadCount = activeTab === 'alerts' ? unreadAlertsCount : unreadNotificationsCount;
+
   return (
     <SafeAreaView style={styles.safeAreaContainer}>
       <View style={styles.contentContainerPadded}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.title}>Alerts</Text>
+            <Text style={styles.title}>Alerts & Notifications</Text>
             <Text style={styles.subtitle}>
-              {unreadCount > 0 
-                ? `You have ${unreadCount} unread alert${unreadCount > 1 ? 's' : ''}` 
-                : 'Stay updated with service alerts'}
+              {currentUnreadCount > 0
+                ? `You have ${currentUnreadCount} unread ${activeTab}`
+                : `Stay updated with ${activeTab}`}
             </Text>
           </View>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.createButton}
             onPress={handleCreateAlert}
             activeOpacity={0.7}
@@ -51,21 +67,43 @@ export default function AlertsScreen() {
             <Ionicons name="add" size={20} color={colors.card} />
           </TouchableOpacity>
         </View>
-        
+
+        {/* Tab Selector */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'alerts' && styles.activeTab]}
+            onPress={() => setActiveTab('alerts')}
+          >
+            <Text style={[styles.tabText, activeTab === 'alerts' && styles.activeTabText]}>
+              Alerts {unreadAlertsCount > 0 && `(${unreadAlertsCount})`}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'notifications' && styles.activeTab]}
+            onPress={() => setActiveTab('notifications')}
+          >
+            <Text style={[styles.tabText, activeTab === 'notifications' && styles.activeTabText]}>
+              Notifications {unreadNotificationsCount > 0 && `(${unreadNotificationsCount})`}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <FlatList
-          data={alerts}
+          data={currentData}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <AlertCard alert={item} onPress={handleAlertPress} />
+            activeTab === 'alerts'
+              ? <AlertCard alert={item as Alert} onPress={handleAlertPress} />
+              : <NotificationItem notification={item as Notification} onPress={handleNotificationPress} />
           )}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>
-                {isLoading 
-                  ? 'Loading alerts...' 
-                  : 'No alerts available'}
+                {currentLoading
+                  ? `Loading ${activeTab}...`
+                  : `No ${activeTab} available`}
               </Text>
             </View>
           }
@@ -120,5 +158,30 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: colors.textSecondary,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    padding: 4,
+    marginBottom: 16,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  activeTab: {
+    backgroundColor: colors.primary,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  activeTabText: {
+    color: colors.card,
   },
 });

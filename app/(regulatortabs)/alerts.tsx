@@ -11,6 +11,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { NotificationItem } from '@/components/NotificationItem';
+import { Notification } from '@/types';
 import { useAuthStore } from '@/stores/authStore';
 
 interface AlertItem {
@@ -31,6 +34,8 @@ export default function AlertsScreen() {
   const { user } = useAuthStore();
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'alerts' | 'notifications'>('alerts');
+  const { notifications, fetchNotifications, markNotificationAsRead, isLoading } = useNotificationStore();
 
   // Mock alerts data
   const mockAlerts: AlertItem[] = [
@@ -100,7 +105,8 @@ export default function AlertsScreen() {
 
   useEffect(() => {
     fetchAlerts();
-  }, []);
+    fetchNotifications();
+  }, [fetchNotifications]);
 
   const fetchAlerts = async () => {
     setRefreshing(true);
@@ -131,6 +137,12 @@ export default function AlertsScreen() {
       )
     );
     Alert.alert('Acknowledged', 'Alert has been acknowledged and sent to control center.');
+  };
+
+  const handleNotificationPress = (notification: Notification) => {
+    if (!notification.read && !notification.is_read) {
+      markNotificationAsRead(notification.id);
+    }
   };
 
   const getPriorityColor = (priority: string) => {
@@ -250,39 +262,76 @@ export default function AlertsScreen() {
     </View>
   );
 
-  const unreadCount = alerts.filter(alert => !alert.read).length;
+  const unreadAlertsCount = alerts.filter(alert => !alert.read).length;
+  const unreadNotificationsCount = notifications.filter(notification => !notification.read && !notification.is_read).length;
   const criticalCount = alerts.filter(alert => alert.priority === 'critical' && !alert.read).length;
+
+  const currentData = activeTab === 'alerts' ? alerts : notifications;
+  const currentUnreadCount = activeTab === 'alerts' ? unreadAlertsCount : unreadNotificationsCount;
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Alerts</Text>
+          <Text style={styles.title}>Alerts & Notifications</Text>
           <Text style={styles.subtitle}>
-            {unreadCount > 0 ? `${unreadCount} unread alerts` : 'All alerts read'}
+            {currentUnreadCount > 0 ? `${currentUnreadCount} unread ${activeTab}` : `All ${activeTab} read`}
             {criticalCount > 0 && ` • ${criticalCount} critical`}
           </Text>
         </View>
-        <TouchableOpacity style={styles.refreshButton} onPress={fetchAlerts}>
+        <TouchableOpacity style={styles.refreshButton} onPress={() => {
+          fetchAlerts();
+          fetchNotifications();
+        }}>
           <Ionicons name="refresh" size={24} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
-      {/* Alerts List */}
+      {/* Tab Selector */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'alerts' && styles.activeTab]}
+          onPress={() => setActiveTab('alerts')}
+        >
+          <Text style={[styles.tabText, activeTab === 'alerts' && styles.activeTabText]}>
+            Alerts {unreadAlertsCount > 0 && `(${unreadAlertsCount})`}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'notifications' && styles.activeTab]}
+          onPress={() => setActiveTab('notifications')}
+        >
+          <Text style={[styles.tabText, activeTab === 'notifications' && styles.activeTabText]}>
+            Notifications {unreadNotificationsCount > 0 && `(${unreadNotificationsCount})`}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Content List */}
       <FlatList
-        data={alerts}
-        renderItem={renderAlert}
+        data={currentData}
+        renderItem={({ item }) => (
+          activeTab === 'alerts'
+            ? renderAlert({ item: item as AlertItem })
+            : <NotificationItem notification={item as Notification} onPress={handleNotificationPress} />
+        )}
         keyExtractor={(item) => item.id}
         style={styles.alertsList}
         contentContainerStyle={styles.alertsContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={fetchAlerts} />
+          <RefreshControl
+            refreshing={refreshing || isLoading}
+            onRefresh={() => {
+              fetchAlerts();
+              fetchNotifications();
+            }}
+          />
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="notifications-outline" size={64} color={colors.textSecondary} />
-            <Text style={styles.emptyText}>No alerts</Text>
+            <Text style={styles.emptyText}>No {activeTab}</Text>
             <Text style={styles.emptySubtext}>You're all caught up!</Text>
           </View>
         }
@@ -485,5 +534,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    padding: 4,
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  activeTab: {
+    backgroundColor: colors.primary,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  activeTabText: {
+    color: colors.card,
   },
 });

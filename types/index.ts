@@ -88,11 +88,20 @@ export interface User {
   // Notification types
   export interface Notification {
     id: string;
-    type: 'alert' | 'info' | 'promo' | 'system';
+    user_id: string;
     title: string;
     message: string;
-    createdAt: string;
-    read: boolean;
+    type: 'ALERT' | 'INFO' | 'PROMO' | 'SYSTEM';
+    is_read: boolean;
+    created_at: string;
+    updated_at: string;
+    related_entity?: {
+      entity_type: string;
+      entity_id: string;
+    };
+    // Legacy fields for backward compatibility
+    createdAt?: string;
+    read?: boolean;
   }
   
   // Feedback types

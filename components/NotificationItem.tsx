@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Notification } from '@/types';
 import { colors } from '@/constants/colors';
-import { Ionicons, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 interface NotificationItemProps {
   notification: Notification;
@@ -31,7 +31,8 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({
   };
   
   const getIcon = () => {
-    switch (notification.type) {
+    const type = notification.type?.toLowerCase();
+    switch (type) {
       case 'alert':
         return <Ionicons name="notifications" size={20} color={colors.primary} />;
       case 'info':
@@ -59,7 +60,7 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({
         <Text style={styles.message} numberOfLines={2}>
           {notification.message}
         </Text>
-        <Text style={styles.time}>{formatDate(notification.createdAt)}</Text>
+        <Text style={styles.time}>{formatDate(notification.createdAt || notification.created_at || '')}</Text>
       </View>
     </TouchableOpacity>
   );
