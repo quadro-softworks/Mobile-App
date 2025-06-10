@@ -10,9 +10,11 @@ import {
   Modal,
   Alert,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
+import { busStopsGeoJSON } from '@/utils/busStopsData';
 
 interface BusArrival {
   id: string;
@@ -50,6 +52,34 @@ export default function ArrivalsScreen() {
   const [selectedBus, setSelectedBus] = useState<BusArrival | null>(null);
   const [showBusDetails, setShowBusDetails] = useState(false);
   const [isCheckedIn, setIsCheckedIn] = useState(false);
+  const [isMapFullScreen, setMapFullScreen] = useState(false);
+
+  // Process bus stops from GeoJSON data
+  const getBusStops = () => {
+    if (!busStopsGeoJSON || !busStopsGeoJSON.features) return [];
+
+    return busStopsGeoJSON.features
+      .filter((feature: any) =>
+        feature.geometry &&
+        feature.geometry.type === 'Point' &&
+        feature.geometry.coordinates &&
+        feature.geometry.coordinates.length >= 2
+      )
+      .map((feature: any) => ({
+        id: feature.id || feature.properties?.['@id'] || Math.random().toString(),
+        name: feature.properties?.name || 'Bus Stop',
+        coordinates: {
+          lng: feature.geometry.coordinates[0],
+          lat: feature.geometry.coordinates[1]
+        },
+        properties: feature.properties
+      }));
+  };
+
+  const busStops = getBusStops();
+
+  // Assigned stop coordinates (Stadium Bus Stop)
+  const assignedStopCoords = { lat: 9.0120276, lng: 38.7570321 };
 
   // Mock arrivals data
   const mockArrivals: BusArrival[] = [
@@ -166,6 +196,10 @@ export default function ArrivalsScreen() {
     return `${eta} mins`;
   };
 
+  const toggleMapFullScreen = () => {
+    setMapFullScreen(!isMapFullScreen);
+  };
+
   const renderBusArrival = ({ item }: { item: BusArrival }) => (
     <TouchableOpacity
       style={styles.busCard}
@@ -234,6 +268,149 @@ export default function ArrivalsScreen() {
           <Text style={styles.checkInText}>
             {isCheckedIn ? 'Checked In' : 'Check In'}
           </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Map View */}
+      <View style={styles.mapContainer}>
+        <WebView
+          source={{
+            html: `<!DOCTYPE html>
+              <html>
+              <head>
+                <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                <style>
+                  html, body, #map { height: 100%; margin: 0; padding: 0; }
+                  .mapboxgl-popup-content {
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                  }
+                  .popup-title {
+                    font-weight: bold;
+                    margin-bottom: 4px;
+                    color: #1f2937;
+                  }
+                  .popup-info {
+                    font-size: 12px;
+                    color: #6b7280;
+                  }
+                </style>
+                <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+              </head>
+              <body>
+                <div id='map' style='width:100vw;height:100vh;'></div>
+                <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+                <script>
+                  mapboxgl.accessToken = 'pk.eyJ1IjoiYmFza2V0bzEyMyIsImEiOiJjbTlqZWVsdzQwZWs5MmtyMDN0b29jMjU1In0.CUIyg0uNKnAfe55aXJ0bBA';
+                  const map = new mapboxgl.Map({
+                    container: 'map',
+                    style: 'mapbox://styles/mapbox/streets-v12',
+                    center: [${assignedStopCoords.lng}, ${assignedStopCoords.lat}],
+                    zoom: 15
+                  });
+
+                  // Add assigned stop marker (larger, special marker)
+                  const assignedStopEl = document.createElement('div');
+                  assignedStopEl.className = 'assigned-stop-marker';
+                  assignedStopEl.style.backgroundImage = 'url(data:image/svg+xml;base64,' + btoa(\`
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="16" cy="16" r="14" fill="#DC2626" stroke="#ffffff" stroke-width="3"/>
+                      <rect x="8" y="10" width="16" height="12" rx="2" fill="#ffffff"/>
+                      <rect x="10" y="12" width="4" height="3" fill="#DC2626"/>
+                      <rect x="18" y="12" width="4" height="3" fill="#DC2626"/>
+                      <circle cx="12" cy="19" r="1.5" fill="#DC2626"/>
+                      <circle cx="20" cy="19" r="1.5" fill="#DC2626"/>
+                      <rect x="14" y="17" width="4" height="1" fill="#DC2626"/>
+                      <path d="M16 6v4" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                  \`) + ')';
+                  assignedStopEl.style.width = '32px';
+                  assignedStopEl.style.height = '32px';
+                  assignedStopEl.style.backgroundSize = 'contain';
+                  assignedStopEl.style.cursor = 'pointer';
+
+                  // Create popup for assigned stop
+                  const assignedPopup = new mapboxgl.Popup({
+                    offset: 25,
+                    closeButton: true,
+                    closeOnClick: false
+                  }).setHTML(\`
+                    <div class="popup-title">📍 Your Assigned Stop</div>
+                    <div class="popup-info">
+                      <strong>${assignedStop.name}</strong><br>
+                      ${assignedStop.location}<br>
+                      Queue Status: <span style="color: \${assignedStop.queueStatus === 'light' ? '#10B981' : assignedStop.queueStatus === 'moderate' ? '#F59E0B' : '#EF4444'}">\${assignedStop.queueStatus.toUpperCase()}</span><br>
+                      Waiting: ${assignedStop.waitingPassengers} passengers
+                    </div>
+                  \`);
+
+                  // Add assigned stop marker
+                  new mapboxgl.Marker(assignedStopEl)
+                    .setLngLat([${assignedStopCoords.lng}, ${assignedStopCoords.lat}])
+                    .setPopup(assignedPopup)
+                    .addTo(map);
+
+                  // Add other bus stops
+                  const busStops = ${JSON.stringify(busStops)};
+
+                  busStops.forEach(stop => {
+                    // Skip if this is the assigned stop
+                    if (stop.name === '${assignedStop.name}') return;
+
+                    // Create a custom bus stop marker
+                    const el = document.createElement('div');
+                    el.className = 'bus-stop-marker';
+                    el.style.backgroundImage = 'url(data:image/svg+xml;base64,' + btoa(\`
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="4" y="6" width="16" height="12" rx="2" fill="#2563EB" stroke="#ffffff" stroke-width="2"/>
+                        <rect x="6" y="8" width="4" height="3" fill="#ffffff"/>
+                        <rect x="14" y="8" width="4" height="3" fill="#ffffff"/>
+                        <circle cx="8" cy="16" r="1.5" fill="#ffffff"/>
+                        <circle cx="16" cy="16" r="1.5" fill="#ffffff"/>
+                        <rect x="10" y="14" width="4" height="1" fill="#ffffff"/>
+                        <path d="M12 4v2" stroke="#2563EB" stroke-width="2" stroke-linecap="round"/>
+                      </svg>
+                    \`) + ')';
+                    el.style.width = '20px';
+                    el.style.height = '20px';
+                    el.style.backgroundSize = 'contain';
+                    el.style.cursor = 'pointer';
+
+                    // Create popup content
+                    const popupContent = \`
+                      <div class="popup-title">\${stop.name}</div>
+                      <div class="popup-info">
+                        \${stop.properties?.operator ? 'Operator: ' + stop.properties.operator + '<br>' : ''}
+                        \${stop.properties?.['ref:AB'] ? 'Routes: ' + stop.properties['ref:AB'] + '<br>' : ''}
+                        \${stop.properties?.network ? 'Network: ' + stop.properties.network : ''}
+                      </div>
+                    \`;
+
+                    // Create popup
+                    const popup = new mapboxgl.Popup({
+                      offset: 25,
+                      closeButton: true,
+                      closeOnClick: false
+                    }).setHTML(popupContent);
+
+                    // Add marker to map
+                    new mapboxgl.Marker(el)
+                      .setLngLat([stop.coordinates.lng, stop.coordinates.lat])
+                      .setPopup(popup)
+                      .addTo(map);
+                  });
+                </script>
+              </body>
+              </html>`
+          }}
+          style={styles.map}
+          originWhitelist={["*"]}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+        />
+        <TouchableOpacity onPress={toggleMapFullScreen} style={styles.fullScreenButton}>
+          {isMapFullScreen ? <Ionicons name="contract" color={colors.primary} size={24}/> : <Ionicons name="expand" color={colors.primary} size={24}/>}
         </TouchableOpacity>
       </View>
 
@@ -574,5 +751,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.text,
     marginBottom: 8,
+  },
+  // Map Styles
+  mapContainer: {
+    height: 200,
+    marginHorizontal: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  map: {
+    flex: 1,
+  },
+  fullScreenButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: 8,
+    borderRadius: 20,
+    zIndex: 11,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
 });
