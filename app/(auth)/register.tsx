@@ -14,7 +14,7 @@ export default function RegisterScreen() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState<'PASSENGER' | 'DRIVE' | 'QUEUE_REGULATOR'>('PASSENGER');
+  const [role, setRole] = useState('PASSENGER');
   const [error, setError] = useState('');
 
   const router = useRouter();
@@ -122,20 +122,6 @@ export default function RegisterScreen() {
             secureTextEntry
             leftIcon={<Ionicons name="lock-closed" size={20} color={colors.textSecondary} />}
           />
-          <View style={{ marginVertical: 12 }}>
-            <Text style={{ color: colors.text, fontWeight: '500', marginBottom: 4 }}>Role</Text>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <TouchableOpacity onPress={() => setRole('PASSENGER')} style={{ padding: 8, borderWidth: 1, borderColor: role === 'PASSENGER' ? colors.primary : colors.border, borderRadius: 8, backgroundColor: role === 'PASSENGER' ? colors.primary : colors.card }}>
-                <Text style={{ color: role === 'PASSENGER' ? colors.card : colors.text }}>Passenger</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setRole('DRIVE')} style={{ padding: 8, borderWidth: 1, borderColor: role === 'DRIVE' ? colors.primary : colors.border, borderRadius: 8, backgroundColor: role === 'DRIVE' ? colors.primary : colors.card }}>
-                <Text style={{ color: role === 'DRIVE' ? colors.card : colors.text }}>Driver</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setRole('QUEUE_REGULATOR')} style={{ padding: 8, borderWidth: 1, borderColor: role === 'QUEUE_REGULATOR' ? colors.primary : colors.border, borderRadius: 8, backgroundColor: role === 'QUEUE_REGULATOR' ? colors.primary : colors.card }}>
-                <Text style={{ color: role === 'QUEUE_REGULATOR' ? colors.card : colors.text }}>Regulator</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
           <Button
             title="Sign Up"
             onPress={handleRegister}

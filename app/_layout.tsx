@@ -2,14 +2,14 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { StatusBar } from "expo-status-bar";
 import { useAuthStore } from "@/stores/authStore";
-import { View, Text } from "react-native";
+
 import { useRouter } from 'expo-router';
 
 export const unstable_settings = {
-  initialRouteName: "(tabs)",
+  initialRouteName: "(auth)",
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -20,7 +20,7 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
 
-  const checkAuth = useAuthStore((state) => state.checkAuth);
+
 
   useEffect(() => {
     if (error) {
@@ -31,11 +31,11 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (loaded) {
-      // Check if user is authenticated
-      checkAuth();
+      // Don't call checkAuth here - let the navigation logic handle it
+      // after the store is hydrated
       SplashScreen.hideAsync();
     }
-  }, [loaded, checkAuth]);
+  }, [loaded]);
 
   if (!loaded) {
     return null;
@@ -46,17 +46,53 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const user = useAuthStore((state) => state.user);
+  const token = useAuthStore((state) => state.token);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
   const router = useRouter();
+  const hasNavigated = useRef(false);
 
-  // Redirect to the correct tab group based on role
+  // Handle authentication and role-based navigation
   useEffect(() => {
-    if (user?.role === 'DRIVE') {
-      router.replace('/(drivertabs)');
-    } else if (user?.role === 'QUEUE_REGULATOR') {
-      router.replace('/(regulatortabs)');
+    console.log('Navigation check:', {
+      isLoading,
+      hasHydrated,
+      user: user?.role,
+      hasToken: !!token,
+      hasNavigated: hasNavigated.current
+    });
+
+    // Wait for both loading to finish AND store to be hydrated
+    // Also prevent multiple navigation calls
+    if (!isLoading && hasHydrated && !hasNavigated.current) {
+      hasNavigated.current = true;
+
+      if (!user || !token) {
+        // No user or token, redirect to login
+        console.log('Redirecting to login - no user or token');
+        router.replace('/(auth)/login');
+      } else {
+        // User is authenticated, redirect based on role
+        console.log('User authenticated, role:', user.role);
+        if (user.role === 'BUS_DRIVER' || user.role === 'DRIVE') {
+          console.log('Redirecting to driver tabs');
+          router.replace('/(drivertabs)');
+        } else if (user.role === 'QUEUE_REGULATOR') {
+          console.log('Redirecting to regulator tabs');
+          router.replace('/(regulatortabs)');
+        } else {
+          // PASSENGER and others go to main tabs
+          console.log('Redirecting to main tabs');
+          router.replace('/(tabs)');
+        }
+      }
     }
-    // PASSENGER and others stay in (tabs)
-  }, [user, router]);
+  }, [user, token, isLoading, hasHydrated, router]);
+
+  // Reset navigation flag when user/token changes (for login/logout)
+  useEffect(() => {
+    hasNavigated.current = false;
+  }, [user, token]);
 
   return (
     <>

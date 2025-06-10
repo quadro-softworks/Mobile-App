@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { useRouter, Link } from 'expo-router';
+import { Link } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -13,15 +13,12 @@ export default function LoginScreen() {
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   
-  const router = useRouter();
-  const { login, isLoading, error, user, clearError } = useAuthStore();
+  const { login, isLoading, error, clearError } = useAuthStore();
   
   useEffect(() => {
-    // If user is already logged in, redirect to home
-    if (user) {
-      router.replace('/(tabs)');
-    }
-  }, [user, router]);
+    // Clear any previous errors when component mounts
+    clearError();
+  }, [clearError]);
   
   const validateForm = () => {
     let isValid = true;

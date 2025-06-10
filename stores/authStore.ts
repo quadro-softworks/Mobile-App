@@ -13,6 +13,8 @@ interface AuthStore extends AuthState {
   updateNotificationSettings: (settings: any) => Promise<void>;
   checkAuth: () => Promise<void>;
   clearError: () => void;
+  hasHydrated: boolean;
+  setHasHydrated: (hasHydrated: boolean) => void;
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -22,6 +24,7 @@ export const useAuthStore = create<AuthStore>()(
       token: null,
       isLoading: false,
       error: null,
+      hasHydrated: false,
 
       register: async (userData) => {
         set({ isLoading: true, error: null });
@@ -56,11 +59,38 @@ export const useAuthStore = create<AuthStore>()(
           }
           const data = await res.json();
           console.log('Login response:', data);
-          set({ 
-            user: data.user ? { ...data.user, role: data.user.role as "PASSENGER" | "BUS_DRIVER" | "QUEUE_REGULATOR" } : null, 
-            token: data.token, 
-            isLoading: false 
+
+          // Handle the actual API response structure
+          const token = data.access_token || data.token;
+          const userRole = data.role as "PASSENGER" | "BUS_DRIVER" | "QUEUE_REGULATOR";
+
+          // Create user object from the response
+          const user = {
+            id: data.sub || 'user-id', // Use sub from JWT or fallback
+            name: data.name || 'User', // Fallback name
+            email: credentials.email, // Use the email from login credentials
+            phone: data.phone || '',
+            language: data.language || 'en',
+            role: userRole,
+            notificationSettings: {
+              pushEnabled: true,
+              emailEnabled: true,
+              alertTypes: ['delay', 'route-change', 'service-disruption'],
+            },
+            favoriteStops: [],
+            favoriteRoutes: [],
+          };
+
+          console.log('Setting user and token in store:', { user, token });
+
+          set({
+            user: user,
+            token: token,
+            isLoading: false
           });
+
+          // Small delay to ensure state is updated before navigation
+          await new Promise(resolve => setTimeout(resolve, 100));
         } catch (error) {
           set({ error: (error as Error).message, isLoading: false });
         }
@@ -80,7 +110,7 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true, error: null });
         try {
           const updatedUser = await authApi.updateProfile(userData);
-          set({ user: { ...updatedUser, role: updatedUser.role as "PASSENGER" | "BUS_DRIVER" | "QUEUE_REGULATOR" }, isLoading: false });
+          set({ user: { ...updatedUser, role: updatedUser.role as "PASSENGER" | "BUS_DRIVER" | "DRIVE" | "QUEUE_REGULATOR" }, isLoading: false });
         } catch (error) {
           set({ error: (error as Error).message, isLoading: false });
         }
@@ -90,7 +120,7 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true, error: null });
         try {
           const updatedUser = await authApi.updateProfile({ language });
-          set({ user: { ...updatedUser, role: updatedUser.role as "PASSENGER" | "BUS_DRIVER" | "QUEUE_REGULATOR" }, isLoading: false });
+          set({ user: { ...updatedUser, role: updatedUser.role as "PASSENGER" | "BUS_DRIVER" | "DRIVE" | "QUEUE_REGULATOR" }, isLoading: false });
         } catch (error) {
           set({ error: (error as Error).message, isLoading: false });
         }
@@ -125,26 +155,32 @@ export const useAuthStore = create<AuthStore>()(
       checkAuth: async () => {
         set({ isLoading: true });
         try {
-          const user = await authApi.getCurrentUser();
-          set({ 
-            user: user
-              ? { 
-                  ...user, 
-                  role: user.role as "PASSENGER" | "BUS_DRIVER" | "QUEUE_REGULATOR"
-                }
-              : null, 
-            isLoading: false 
-          });
+          // Since we're using the real API and Zustand persist handles the token storage,
+          // we just need to check if we have a valid token and user in the store
+          const currentState = get();
+          if (currentState.token && currentState.user) {
+            // We have a stored session, keep it
+            set({ isLoading: false });
+          } else {
+            // No stored session, clear everything
+            set({ user: null, token: null, isLoading: false });
+          }
         } catch (error) {
           set({ user: null, token: null, isLoading: false });
         }
       },
 
       clearError: () => set({ error: null }),
+
+      setHasHydrated: (hasHydrated: boolean) => set({ hasHydrated }),
     }),
     {
       name: 'auth-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      onRehydrateStorage: () => (state) => {
+        console.log('Zustand store hydrated:', state);
+        state?.setHasHydrated(true);
+      },
     }
   )
 );
