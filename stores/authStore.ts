@@ -2,19 +2,20 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authApi } from '@/services/mockApi';
-import { AuthState, User } from '@/types';
+import { AuthState } from '@/types';
 
 interface AuthStore extends AuthState {
   register: (userData: any) => Promise<void>;
   login: (credentials: { email: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
-  updateProfile: (userData: Partial<User>) => Promise<void>;
+  updateProfile: (userData: any) => Promise<void>;
   updateLanguage: (language: string) => Promise<void>;
   updateNotificationSettings: (settings: any) => Promise<void>;
   checkAuth: () => Promise<void>;
   clearError: () => void;
   hasHydrated: boolean;
   setHasHydrated: (hasHydrated: boolean) => void;
+  fetchCurrentUser: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -109,9 +110,57 @@ export const useAuthStore = create<AuthStore>()(
       updateProfile: async (userData) => {
         set({ isLoading: true, error: null });
         try {
-          const updatedUser = await authApi.updateProfile(userData);
-          set({ user: { ...updatedUser, role: updatedUser.role as "PASSENGER" | "BUS_DRIVER" | "DRIVE" | "QUEUE_REGULATOR" }, isLoading: false });
+          const currentState = get();
+          if (!currentState.token) {
+            throw new Error('No authentication token found');
+          }
+
+          // Call the real API to update profile
+          const res = await fetch('https://guzosync-fastapi.onrender.com/api/account/me', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${currentState.token}`,
+            },
+            body: JSON.stringify({
+              first_name: userData.first_name || (userData.name ? userData.name.split(' ')[0] : ''),
+              last_name: userData.last_name || (userData.name ? userData.name.split(' ').slice(1).join(' ') : ''),
+              email: userData.email,
+              phone_number: userData.phone_number || userData.phone,
+              profile_image: userData.profile_image || '',
+            }),
+          });
+
+          if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.detail || 'Failed to update profile');
+          }
+
+          const updatedUserData = await res.json();
+          console.log('Profile update response:', updatedUserData);
+
+          // Update the user in the store with the response data
+          const updatedUser = {
+            ...currentState.user,
+            id: updatedUserData.id,
+            name: `${updatedUserData.first_name} ${updatedUserData.last_name}`.trim(),
+            email: updatedUserData.email,
+            phone: updatedUserData.phone_number,
+            role: updatedUserData.role as "PASSENGER" | "BUS_DRIVER" | "DRIVE" | "QUEUE_REGULATOR",
+            // Keep existing fields that aren't returned by the API
+            language: currentState.user?.language || 'en',
+            notificationSettings: currentState.user?.notificationSettings || {
+              pushEnabled: true,
+              emailEnabled: true,
+              alertTypes: ['delay', 'route-change', 'service-disruption'],
+            },
+            favoriteStops: currentState.user?.favoriteStops || [],
+            favoriteRoutes: currentState.user?.favoriteRoutes || [],
+          };
+
+          set({ user: updatedUser, isLoading: false });
         } catch (error) {
+          console.error('Profile update error:', error);
           set({ error: (error as Error).message, isLoading: false });
         }
       },
@@ -173,6 +222,55 @@ export const useAuthStore = create<AuthStore>()(
       clearError: () => set({ error: null }),
 
       setHasHydrated: (hasHydrated: boolean) => set({ hasHydrated }),
+
+      fetchCurrentUser: async () => {
+        set({ isLoading: true, error: null });
+        try {
+          const currentState = get();
+          if (!currentState.token) {
+            throw new Error('No authentication token found');
+          }
+
+          const res = await fetch('https://guzosync-fastapi.onrender.com/api/account/me', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${currentState.token}`,
+            },
+          });
+
+          if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.detail || 'Failed to fetch user profile');
+          }
+
+          const userData = await res.json();
+          console.log('Fetched user profile:', userData);
+
+          // Update the user in the store with the fetched data
+          const updatedUser = {
+            ...currentState.user,
+            id: userData.id,
+            name: `${userData.first_name} ${userData.last_name}`.trim(),
+            email: userData.email,
+            phone: userData.phone_number,
+            role: userData.role as "PASSENGER" | "BUS_DRIVER" | "DRIVE" | "QUEUE_REGULATOR",
+            // Keep existing fields that aren't returned by the API
+            language: currentState.user?.language || 'en',
+            notificationSettings: currentState.user?.notificationSettings || {
+              pushEnabled: true,
+              emailEnabled: true,
+              alertTypes: ['delay', 'route-change', 'service-disruption'],
+            },
+            favoriteStops: currentState.user?.favoriteStops || [],
+            favoriteRoutes: currentState.user?.favoriteRoutes || [],
+          };
+
+          set({ user: updatedUser, isLoading: false });
+        } catch (error) {
+          console.error('Fetch user profile error:', error);
+          set({ error: (error as Error).message, isLoading: false });
+        }
+      },
     }),
     {
       name: 'auth-storage',

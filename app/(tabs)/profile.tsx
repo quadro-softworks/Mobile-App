@@ -24,10 +24,10 @@ import { Ionicons, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icon
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, logout, updateProfile, updateNotificationSettings } = useAuthStore();
+  const { user, logout, updateProfile, updateNotificationSettings, fetchCurrentUser, isLoading } = useAuthStore();
   const { notifications, fetchNotifications } = useNotificationStore();
   const { fetchBusStops, fetchRoutes } = useBusStore();
-  
+
   const [pushEnabled, setPushEnabled] = useState(
     user?.notificationSettings?.pushEnabled ?? true
   );
@@ -36,14 +36,22 @@ export default function ProfileScreen() {
   );
   const [avatar, setAvatar] = useState<string | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [name, setName] = useState(user?.name || '');
-  const [phone, setPhone] = useState(user?.phone || '');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   
   useEffect(() => {
     if (user) {
       fetchNotifications();
       fetchBusStops();
       fetchRoutes();
+      // Initialize form fields with user data
+      const nameParts = user.name.split(' ');
+      setFirstName(nameParts[0] || '');
+      setLastName(nameParts.slice(1).join(' ') || '');
+      setEmail(user.email || '');
+      setPhone(user.phone || '');
     }
   }, [user, fetchNotifications, fetchBusStops, fetchRoutes]);
   
@@ -123,9 +131,11 @@ export default function ProfileScreen() {
   const handleSaveProfile = async () => {
     try {
       await updateProfile({
-        name,
-        phone,
-        // In a real app, we would include the avatar URL here
+        first_name: firstName,
+        last_name: lastName,
+        email: email,
+        phone_number: phone,
+        profile_image: avatar || '',
       });
       setIsEditingProfile(false);
       Alert.alert('Success', 'Profile updated successfully');
@@ -209,14 +219,32 @@ export default function ProfileScreen() {
         
         {isEditingProfile ? (
           <View style={styles.editProfileContainer}>
-            <Text style={styles.editProfileLabel}>Name</Text>
+            <Text style={styles.editProfileLabel}>First Name</Text>
             <TextInput
               style={styles.editProfileInput}
-              value={name}
-              onChangeText={setName}
-              placeholder="Your name"
+              value={firstName}
+              onChangeText={setFirstName}
+              placeholder="Your first name"
             />
-            
+
+            <Text style={styles.editProfileLabel}>Last Name</Text>
+            <TextInput
+              style={styles.editProfileInput}
+              value={lastName}
+              onChangeText={setLastName}
+              placeholder="Your last name"
+            />
+
+            <Text style={styles.editProfileLabel}>Email</Text>
+            <TextInput
+              style={styles.editProfileInput}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="Your email"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
             <Text style={styles.editProfileLabel}>Phone</Text>
             <TextInput
               style={styles.editProfileInput}
@@ -225,14 +253,18 @@ export default function ProfileScreen() {
               placeholder="Your phone number"
               keyboardType="phone-pad"
             />
-            
+
             <View style={styles.editProfileButtons}>
               <Button
                 title="Cancel"
                 onPress={() => {
                   setIsEditingProfile(false);
-                  setName(user.name || '');
-                  setPhone(user.phone || '');
+                  // Reset form fields
+                  const nameParts = user?.name.split(' ') || [];
+                  setFirstName(nameParts[0] || '');
+                  setLastName(nameParts.slice(1).join(' ') || '');
+                  setEmail(user?.email || '');
+                  setPhone(user?.phone || '');
                 }}
                 variant="outline"
                 style={styles.editProfileButton}
@@ -240,14 +272,16 @@ export default function ProfileScreen() {
               <Button
                 title="Save"
                 onPress={handleSaveProfile}
+                loading={isLoading}
                 style={styles.editProfileButton}
               />
             </View>
           </View>
         ) : (
           <>
-            <Text style={styles.name}>{user.name}</Text>
-            <TouchableOpacity 
+            <Text style={styles.name}>{user?.name}</Text>
+            <Text style={styles.email}>{user?.email}</Text>
+            <TouchableOpacity
               style={styles.editButton}
               onPress={() => setIsEditingProfile(true)}
             >
@@ -557,6 +591,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.card,
     marginBottom: 4,
+  },
+  email: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginBottom: 8,
   },
   editButton: {
     marginTop: 8,

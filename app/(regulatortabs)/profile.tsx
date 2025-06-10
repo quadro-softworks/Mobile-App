@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   FlatList,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
@@ -31,12 +32,17 @@ interface AssignedStop {
 }
 
 export default function RegulatorProfileScreen() {
-  const { user, logout } = useAuthStore();
+  const { user, logout, updateProfile, isLoading } = useAuthStore();
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('English');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [assignedStops] = useState<AssignedStop[]>([
     {
       id: 'stop_001',
@@ -70,7 +76,15 @@ export default function RegulatorProfileScreen() {
 
   useEffect(() => {
     setAttendanceRecords(mockAttendance);
-  }, []);
+    // Initialize form fields with user data
+    if (user) {
+      const nameParts = user.name.split(' ');
+      setFirstName(nameParts[0] || '');
+      setLastName(nameParts.slice(1).join(' ') || '');
+      setEmail(user.email || '');
+      setPhone(user.phone || '');
+    }
+  }, [user]);
 
   const handleCheckInOut = () => {
     const now = new Date();
@@ -109,6 +123,22 @@ export default function RegulatorProfileScreen() {
     setSelectedLanguage(language.name);
     setShowLanguageModal(false);
     Alert.alert('Language Changed', `Language changed to ${language.name}`);
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      await updateProfile({
+        first_name: firstName,
+        last_name: lastName,
+        email: email,
+        phone_number: phone,
+        profile_image: '',
+      });
+      setShowEditModal(false);
+      Alert.alert('Success', 'Profile updated successfully');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -159,7 +189,16 @@ export default function RegulatorProfileScreen() {
 
         {/* Regulator Details */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Regulator Details</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Regulator Details</Text>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => setShowEditModal(true)}
+            >
+              <Ionicons name="pencil" size={16} color={colors.primary} />
+              <Text style={styles.editButtonText}>Edit</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.card}>
             <View style={styles.regulatorInfo}>
               <View style={styles.avatar}>
@@ -169,6 +208,7 @@ export default function RegulatorProfileScreen() {
                 <Text style={styles.regulatorName}>{user?.name || 'Regulator Name'}</Text>
                 <Text style={styles.regulatorId}>Regulator ID: REG001</Text>
                 <Text style={styles.regulatorEmail}>{user?.email || 'regulator@example.com'}</Text>
+                <Text style={styles.regulatorPhone}>{user?.phone || 'No phone number'}</Text>
               </View>
             </View>
           </View>
@@ -318,6 +358,65 @@ export default function RegulatorProfileScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.attendanceList}
           />
+        </SafeAreaView>
+      </Modal>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <SafeAreaView style={styles.editModalContainer}>
+          <View style={styles.editModalHeader}>
+            <TouchableOpacity onPress={() => setShowEditModal(false)}>
+              <Text style={styles.cancelButton}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.editModalTitle}>Edit Profile</Text>
+            <TouchableOpacity onPress={handleSaveProfile} disabled={isLoading}>
+              <Text style={[styles.cancelButton, { color: colors.primary }]}>
+                {isLoading ? 'Saving...' : 'Save'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.editModalContent}>
+            <Text style={styles.editFormLabel}>First Name</Text>
+            <TextInput
+              style={styles.editFormInput}
+              value={firstName}
+              onChangeText={setFirstName}
+              placeholder="Enter first name"
+            />
+
+            <Text style={styles.editFormLabel}>Last Name</Text>
+            <TextInput
+              style={styles.editFormInput}
+              value={lastName}
+              onChangeText={setLastName}
+              placeholder="Enter last name"
+            />
+
+            <Text style={styles.editFormLabel}>Email</Text>
+            <TextInput
+              style={styles.editFormInput}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="Enter email"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            <Text style={styles.editFormLabel}>Phone Number</Text>
+            <TextInput
+              style={styles.editFormInput}
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="Enter phone number"
+              keyboardType="phone-pad"
+            />
+          </ScrollView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -573,5 +672,76 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 14,
     color: colors.textSecondary,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: colors.highlight,
+    borderRadius: 16,
+    gap: 4,
+  },
+  editButtonText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  regulatorPhone: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  editModalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  editModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  editModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  editModalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  editFormLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 6,
+    marginTop: 16,
+  },
+  editFormInput: {
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    fontSize: 16,
+  },
+  editFormButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 24,
+  },
+  editFormButton: {
+    flex: 1,
   },
 });

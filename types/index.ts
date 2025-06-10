@@ -10,6 +10,14 @@ export interface User {
     favoriteRoutes: string[];
     role: 'PASSENGER' | 'BUS_DRIVER' | 'DRIVE' | 'QUEUE_REGULATOR';
   }
+
+  export interface ProfileUpdateData {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    phone_number?: string;
+    profile_image?: string;
+  }
   
   export interface NotificationSettings {
     pushEnabled: boolean;
