@@ -8,6 +8,7 @@ import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
 import { Bus } from '@/types';
+import { busStopsGeoJSON } from '@/utils/busStopsData';
 
 export default function MapScreen() {
   const router = useRouter();
@@ -15,6 +16,30 @@ export default function MapScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredBuses, setFilteredBuses] = useState<Bus[]>([]);
   const [isMapFullScreen, setMapFullScreen] = useState(false);
+
+  // Process bus stops from GeoJSON data
+  const getBusStops = () => {
+    if (!busStopsGeoJSON || !busStopsGeoJSON.features) return [];
+
+    return busStopsGeoJSON.features
+      .filter((feature: any) =>
+        feature.geometry &&
+        feature.geometry.type === 'Point' &&
+        feature.geometry.coordinates &&
+        feature.geometry.coordinates.length >= 2
+      )
+      .map((feature: any) => ({
+        id: feature.id || feature.properties?.['@id'] || Math.random().toString(),
+        name: feature.properties?.name || 'Bus Stop',
+        coordinates: {
+          lng: feature.geometry.coordinates[0],
+          lat: feature.geometry.coordinates[1]
+        },
+        properties: feature.properties
+      }));
+  };
+
+  const busStops = getBusStops();
   
   useEffect(() => {
     fetchBuses();
@@ -62,7 +87,23 @@ export default function MapScreen() {
               <html>
               <head>
                 <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-                <style>html, body, #map { height: 100%; margin: 0; padding: 0; }</style>
+                <style>
+                  html, body, #map { height: 100%; margin: 0; padding: 0; }
+                  .mapboxgl-popup-content {
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                  }
+                  .popup-title {
+                    font-weight: bold;
+                    margin-bottom: 4px;
+                    color: #1f2937;
+                  }
+                  .popup-info {
+                    font-size: 12px;
+                    color: #6b7280;
+                  }
+                </style>
                 <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
               </head>
               <body>
@@ -72,9 +113,48 @@ export default function MapScreen() {
                   mapboxgl.accessToken = 'pk.eyJ1IjoiYmFza2V0bzEyMyIsImEiOiJjbTlqZWVsdzQwZWs5MmtyMDN0b29jMjU1In0.CUIyg0uNKnAfe55aXJ0bBA';
                   const map = new mapboxgl.Map({
                     container: 'map',
-                    style: 'mapbox://styles/mapbox/streets-v11',
-                    center: [38.7578, 9.0301], // Example: Addis Ababa
+                    style: 'mapbox://styles/mapbox/streets-v12',
+                    center: [38.7578, 9.0301], // Addis Ababa
                     zoom: 12
+                  });
+
+                  // Add bus stops
+                  const busStops = ${JSON.stringify(busStops)};
+
+                  busStops.forEach(stop => {
+                    // Create a simple orange dot marker
+                    const el = document.createElement('div');
+                    el.className = 'bus-stop-marker';
+                    el.style.background = '#FF8800'; // Orange color
+                    el.style.width = '10px';
+                    el.style.height = '10px';
+                    el.style.borderRadius = '50%';
+                    el.style.border = '2px solid #fff';
+                    el.style.boxShadow = '0 0 4px rgba(0,0,0,0.15)';
+                    el.style.cursor = 'pointer';
+
+                    // Create popup content
+                    const popupContent = \`
+                      <div class="popup-title">\${stop.name}</div>
+                      <div class="popup-info">
+                        \${stop.properties?.operator ? 'Operator: ' + stop.properties.operator + '<br>' : ''}
+                        \${stop.properties?.['ref:AB'] ? 'Routes: ' + stop.properties['ref:AB'] + '<br>' : ''}
+                        \${stop.properties?.network ? 'Network: ' + stop.properties.network : ''}
+                      </div>
+                    \`;
+
+                    // Create popup
+                    const popup = new mapboxgl.Popup({
+                      offset: 25,
+                      closeButton: true,
+                      closeOnClick: false
+                    }).setHTML(popupContent);
+
+                    // Add marker to map
+                    new mapboxgl.Marker(el)
+                      .setLngLat([stop.coordinates.lng, stop.coordinates.lat])
+                      .setPopup(popup)
+                      .addTo(map);
                   });
                 </script>
               </body>
