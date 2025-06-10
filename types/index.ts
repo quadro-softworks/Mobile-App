@@ -8,7 +8,7 @@ export interface User {
     notificationSettings: NotificationSettings;
     favoriteStops: string[];
     favoriteRoutes: string[];
-    role: 'PASSENGER' | 'DRIVE' | 'QUEUE_REGULATOR';
+    role: 'PASSENGER' | 'BUS_DRIVER' | 'QUEUE_REGULATOR';
   }
   
   export interface NotificationSettings {

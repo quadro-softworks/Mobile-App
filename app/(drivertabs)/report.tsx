@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,15 @@ import {
   SafeAreaView,
   Alert,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { colors } from '@/constants/colors';
-import { useAuthStore } from '@/stores/authStore';
+import { useIncidentStore } from '@/stores/incidentStore';
+import { useBusStore } from '@/stores/busStore';
+import { CreateIncidentRequest, IncidentLocation } from '@/services/incidentApi';
+import { Bus, Route } from '@/types';
 
 interface ReportType {
   id: string;
@@ -27,18 +32,88 @@ interface Report {
   type: string;
   title: string;
   description: string;
-  location?: string;
+  location?: IncidentLocation;
   timestamp: string;
   status: 'pending' | 'submitted' | 'resolved';
+  severity?: 'LOW' | 'MEDIUM' | 'HIGH';
+  related_bus_id?: string;
+  related_route_id?: string;
 }
 
 export default function ReportScreen() {
-  const { user } = useAuthStore();
+  // Store hooks
+  const { reportIncident, incidents, isLoading: incidentLoading, error: incidentError } = useIncidentStore();
+  const { buses, routes, fetchBuses, fetchRoutes } = useBusStore();
+
+  // Form state
   const [selectedReportType, setSelectedReportType] = useState<ReportType | null>(null);
   const [reportDescription, setReportDescription] = useState('');
-  const [reportLocation, setReportLocation] = useState('');
+  const [selectedSeverity, setSelectedSeverity] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('LOW');
+  const [selectedBus, setSelectedBus] = useState<Bus | null>(null);
+  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<IncidentLocation | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+
+  // Local state for display
   const [reports, setReports] = useState<Report[]>([]);
+
+  // Load data on component mount
+  useEffect(() => {
+    fetchBuses();
+    fetchRoutes();
+    getCurrentLocation();
+  }, [fetchBuses, fetchRoutes]);
+
+  // Convert incidents to reports for display
+  useEffect(() => {
+    const convertedReports: Report[] = incidents.map(incident => ({
+      id: incident.id,
+      type: 'incident',
+      title: 'Incident Report',
+      description: incident.description,
+      location: incident.location,
+      timestamp: incident.created_at,
+      status: incident.is_resolved ? 'resolved' : 'submitted',
+      severity: incident.severity,
+      related_bus_id: incident.related_bus_id,
+      related_route_id: incident.related_route_id,
+    }));
+    setReports(convertedReports);
+  }, [incidents]);
+
+  // Show error if incident API fails
+  useEffect(() => {
+    if (incidentError) {
+      Alert.alert('Error', incidentError);
+    }
+  }, [incidentError]);
+
+  // Get current location
+  const getCurrentLocation = async () => {
+    try {
+      setIsGettingLocation(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Location permission is required to report incidents.');
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      setCurrentLocation({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+    } catch (error) {
+      console.error('Error getting location:', error);
+      Alert.alert('Location Error', 'Failed to get current location. Please try again.');
+    } finally {
+      setIsGettingLocation(false);
+    }
+  };
 
   const reportTypes: ReportType[] = [
     {
@@ -49,32 +124,11 @@ export default function ReportScreen() {
       color: colors.error,
     },
     {
-      id: 'route_problem',
-      title: 'Route Problem',
-      description: 'Road closures, traffic issues',
-      icon: 'map',
-      color: colors.warning,
-    },
-    {
-      id: 'passenger_incident',
-      title: 'Passenger Incident',
-      description: 'Safety concerns, disputes',
-      icon: 'people',
-      color: colors.primary,
-    },
-    {
       id: 'safety_concern',
       title: 'Safety Concern',
       description: 'Hazards, security issues',
       icon: 'shield-checkmark',
       color: colors.error,
-    },
-    {
-      id: 'schedule_delay',
-      title: 'Schedule Delay',
-      description: 'Unexpected delays, timing issues',
-      icon: 'time',
-      color: colors.warning,
     },
     {
       id: 'other',
@@ -96,29 +150,35 @@ export default function ReportScreen() {
       return;
     }
 
+    if (!currentLocation) {
+      Alert.alert('Error', 'Location is required. Please enable location services and try again.');
+      return;
+    }
+
     try {
-      const newReport: Report = {
-        id: Date.now().toString(),
-        type: selectedReportType.id,
-        title: selectedReportType.title,
+      const incidentData: CreateIncidentRequest = {
         description: reportDescription.trim(),
-        location: reportLocation.trim() || undefined,
-        timestamp: new Date().toISOString(),
-        status: 'submitted',
+        location: currentLocation,
+        severity: selectedSeverity,
+        ...(selectedBus && { related_bus_id: selectedBus.id }),
+        ...(selectedRoute && { related_route_id: selectedRoute.id }),
       };
 
-      setReports(prev => [newReport, ...prev]);
-      
+      await reportIncident(incidentData);
+
       // Reset form
       setSelectedReportType(null);
       setReportDescription('');
-      setReportLocation('');
+      setSelectedSeverity('LOW');
+      setSelectedBus(null);
+      setSelectedRoute(null);
       setIsModalVisible(false);
 
-      Alert.alert('Success', 'Report submitted successfully');
+      Alert.alert('Success', 'Incident reported successfully');
     } catch (error) {
       console.error('Error submitting report:', error);
-      Alert.alert('Error', 'Failed to submit report');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to submit report';
+      Alert.alert('Error', errorMessage);
     }
   };
 
@@ -165,7 +225,12 @@ export default function ReportScreen() {
       {report.location && (
         <View style={styles.locationContainer}>
           <Ionicons name="location" size={14} color={colors.textSecondary} />
-          <Text style={styles.locationText}>{report.location}</Text>
+          <Text style={styles.locationText}>
+            {typeof report.location === 'object'
+              ? `${report.location.latitude.toFixed(4)}, ${report.location.longitude.toFixed(4)}`
+              : report.location
+            }
+          </Text>
         </View>
       )}
       <Text style={styles.reportTimestamp}>{formatDate(report.timestamp)}</Text>
@@ -214,9 +279,7 @@ export default function ReportScreen() {
               <Text style={styles.cancelButton}>Cancel</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Submit Report</Text>
-            <TouchableOpacity onPress={submitReport}>
-              <Text style={styles.submitButton}>Submit</Text>
-            </TouchableOpacity>
+            <View style={{ width: 60 }} />
           </View>
 
           <ScrollView style={styles.modalContent}>
@@ -247,15 +310,144 @@ export default function ReportScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Location (Optional)</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Specific location or landmark"
-                value={reportLocation}
-                onChangeText={setReportLocation}
-                maxLength={100}
-              />
+              <Text style={styles.inputLabel}>Severity *</Text>
+              <View style={styles.severityContainer}>
+                {(['LOW', 'MEDIUM', 'HIGH'] as const).map((severity) => (
+                  <TouchableOpacity
+                    key={severity}
+                    style={[
+                      styles.severityOption,
+                      selectedSeverity === severity && styles.selectedSeverityOption
+                    ]}
+                    onPress={() => setSelectedSeverity(severity)}
+                  >
+                    <Text style={[
+                      styles.severityOptionText,
+                      selectedSeverity === severity && styles.selectedSeverityOptionText
+                    ]}>
+                      {severity}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
+
+            {buses.length > 0 && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Related Bus (Optional)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+                  <TouchableOpacity
+                    style={[
+                      styles.selectionOption,
+                      !selectedBus && styles.selectedSelectionOption
+                    ]}
+                    onPress={() => setSelectedBus(null)}
+                  >
+                    <Text style={[
+                      styles.selectionOptionText,
+                      !selectedBus && styles.selectedSelectionOptionText
+                    ]}>
+                      None
+                    </Text>
+                  </TouchableOpacity>
+                  {buses.map((bus) => (
+                    <TouchableOpacity
+                      key={bus.id}
+                      style={[
+                        styles.selectionOption,
+                        selectedBus?.id === bus.id && styles.selectedSelectionOption
+                      ]}
+                      onPress={() => setSelectedBus(bus)}
+                    >
+                      <Text style={[
+                        styles.selectionOptionText,
+                        selectedBus?.id === bus.id && styles.selectedSelectionOptionText
+                      ]}>
+                        {bus.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {routes.length > 0 && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Related Route (Optional)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+                  <TouchableOpacity
+                    style={[
+                      styles.selectionOption,
+                      !selectedRoute && styles.selectedSelectionOption
+                    ]}
+                    onPress={() => setSelectedRoute(null)}
+                  >
+                    <Text style={[
+                      styles.selectionOptionText,
+                      !selectedRoute && styles.selectedSelectionOptionText
+                    ]}>
+                      None
+                    </Text>
+                  </TouchableOpacity>
+                  {routes.map((route) => (
+                    <TouchableOpacity
+                      key={route.id}
+                      style={[
+                        styles.selectionOption,
+                        selectedRoute?.id === route.id && styles.selectedSelectionOption
+                      ]}
+                      onPress={() => setSelectedRoute(route)}
+                    >
+                      <Text style={[
+                        styles.selectionOptionText,
+                        selectedRoute?.id === route.id && styles.selectedSelectionOptionText
+                      ]}>
+                        {route.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Location</Text>
+              <View style={styles.locationInfo}>
+                {isGettingLocation ? (
+                  <View style={styles.locationLoading}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={styles.locationLoadingText}>Getting location...</Text>
+                  </View>
+                ) : currentLocation ? (
+                  <View style={styles.locationDisplay}>
+                    <Ionicons name="location" size={16} color={colors.success} />
+                    <Text style={styles.locationText}>
+                      {currentLocation.latitude.toFixed(4)}, {currentLocation.longitude.toFixed(4)}
+                    </Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity style={styles.locationRetry} onPress={getCurrentLocation}>
+                    <Ionicons name="refresh" size={16} color={colors.primary} />
+                    <Text style={styles.locationRetryText}>Retry getting location</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.submitButtonContainer,
+                (incidentLoading || !currentLocation) && styles.submitButtonDisabled
+              ]}
+              onPress={submitReport}
+              disabled={incidentLoading || !currentLocation}
+            >
+              {incidentLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.submitButtonText}>Submit Report</Text>
+              )}
+            </TouchableOpacity>
 
             <View style={styles.infoContainer}>
               <Ionicons name="information-circle" size={20} color={colors.primary} />
@@ -371,7 +563,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: colors.white,
+    color: '#fff',
   },
   reportDescription: {
     fontSize: 14,
@@ -492,5 +684,105 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
     lineHeight: 20,
+  },
+  submitButtonContainer: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  submitButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  submitButtonDisabled: {
+    backgroundColor: colors.inactive,
+    opacity: 0.6,
+  },
+  severityContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  severityOption: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+  },
+  selectedSeverityOption: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  severityOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  selectedSeverityOptionText: {
+    color: '#fff',
+  },
+  horizontalScroll: {
+    marginTop: 8,
+  },
+  selectionOption: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginRight: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  selectedSelectionOption: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  selectionOptionText: {
+    fontSize: 14,
+    color: colors.text,
+  },
+  selectedSelectionOptionText: {
+    color: '#fff',
+  },
+  locationInfo: {
+    marginTop: 8,
+  },
+  locationLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: colors.highlight,
+    borderRadius: 8,
+  },
+  locationLoadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: colors.text,
+  },
+  locationDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: colors.success + '10',
+    borderRadius: 8,
+  },
+  locationRetry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: colors.highlight,
+    borderRadius: 8,
+  },
+  locationRetryText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: colors.primary,
   },
 });

@@ -56,7 +56,11 @@ export const useAuthStore = create<AuthStore>()(
           }
           const data = await res.json();
           console.log('Login response:', data);
-          set({ user: data.user, token: data.token, isLoading: false });
+          set({ 
+            user: data.user ? { ...data.user, role: data.user.role as "PASSENGER" | "BUS_DRIVER" | "QUEUE_REGULATOR" } : null, 
+            token: data.token, 
+            isLoading: false 
+          });
         } catch (error) {
           set({ error: (error as Error).message, isLoading: false });
         }
@@ -76,7 +80,7 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true, error: null });
         try {
           const updatedUser = await authApi.updateProfile(userData);
-          set({ user: updatedUser, isLoading: false });
+          set({ user: { ...updatedUser, role: updatedUser.role as "PASSENGER" | "BUS_DRIVER" | "QUEUE_REGULATOR" }, isLoading: false });
         } catch (error) {
           set({ error: (error as Error).message, isLoading: false });
         }
@@ -86,7 +90,7 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true, error: null });
         try {
           const updatedUser = await authApi.updateProfile({ language });
-          set({ user: updatedUser, isLoading: false });
+          set({ user: { ...updatedUser, role: updatedUser.role as "PASSENGER" | "BUS_DRIVER" | "QUEUE_REGULATOR" }, isLoading: false });
         } catch (error) {
           set({ error: (error as Error).message, isLoading: false });
         }
@@ -122,7 +126,15 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true });
         try {
           const user = await authApi.getCurrentUser();
-          set({ user, isLoading: false });
+          set({ 
+            user: user
+              ? { 
+                  ...user, 
+                  role: user.role as "PASSENGER" | "BUS_DRIVER" | "QUEUE_REGULATOR"
+                }
+              : null, 
+            isLoading: false 
+          });
         } catch (error) {
           set({ user: null, token: null, isLoading: false });
         }
