@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Text, FlatList, Platform, SafeAreaView } from 'react-native';
+import { View, StyleSheet, Text, FlatList, Platform, SafeAreaView, RefreshControl, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useBusStore } from '@/stores/busStore';
 import { StopCard } from '@/components/StopCard';
@@ -10,8 +10,10 @@ import { BusStop } from '@/types';
 
 export default function StopsScreen() {
   const router = useRouter();
-  const { stops, fetchBusStops, isLoading, error } = useBusStore();
+  const { stops, fetchBusStops, isLoading, error, searchParams } = useBusStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   
   useEffect(() => {
     fetchBusStops();
@@ -30,9 +32,29 @@ export default function StopsScreen() {
     router.push(`/stop/${stop.id}`);
   };
   
-  const handleEndReached = () => {
-    // Load more stops when reaching the end of the list
-    // This would typically increment the page number
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchBusStops({ pn: 1, search: searchQuery || undefined });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleEndReached = async () => {
+    if (loadingMore || isLoading) return;
+
+    setLoadingMore(true);
+    try {
+      const nextPage = (searchParams?.pn || 1) + 1;
+      await fetchBusStops({
+        pn: nextPage,
+        search: searchQuery || undefined,
+        // Note: This would need to be modified to append results rather than replace
+      });
+    } finally {
+      setLoadingMore(false);
+    }
   };
   
   if (isLoading) {
@@ -59,8 +81,23 @@ export default function StopsScreen() {
     <SafeAreaView style={styles.safeAreaContainer}>
       <View style={[styles.contentContainer, styles.contentContainerPadded]}>
         <View style={styles.header}>
-          <Text style={styles.title}>Bus Stops</Text>
-          <Text style={styles.subtitle}>Find stops and check incoming buses</Text>
+          <View style={styles.headerContent}>
+            <View>
+              <Text style={styles.title}>Bus Stops</Text>
+              <Text style={styles.subtitle}>Find stops and check incoming buses</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.refreshButton}
+              onPress={handleRefresh}
+              disabled={isLoading || refreshing}
+            >
+              <Ionicons
+                name="refresh"
+                size={24}
+                color={isLoading || refreshing ? colors.textSecondary : colors.primary}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
         
         <View style={styles.searchContainer}>
@@ -77,9 +114,9 @@ export default function StopsScreen() {
           data={stops}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <StopCard 
-              stop={item} 
-              onPress={handleStopPress} 
+            <StopCard
+              stop={item}
+              onPress={handleStopPress}
               showFavoriteButton={true}
             />
           )}
@@ -87,16 +124,31 @@ export default function StopsScreen() {
           showsVerticalScrollIndicator={false}
           onEndReached={handleEndReached}
           onEndReachedThreshold={0.5}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>
-                {isLoading 
-                  ? 'Loading stops...' 
-                  : searchQuery 
-                    ? 'No stops match your search' 
+                {isLoading
+                  ? 'Loading stops...'
+                  : searchQuery
+                    ? 'No stops match your search'
                     : 'No stops available'}
               </Text>
             </View>
+          }
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.loadingMore}>
+                <Text style={styles.loadingMoreText}>Loading more stops...</Text>
+              </View>
+            ) : null
           }
         />
       </View>
@@ -124,6 +176,15 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: 16,
     paddingBottom: 8,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 20,
   },
   title: {
     fontSize: 24,
@@ -159,5 +220,13 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: colors.error,
+  },
+  loadingMore: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  loadingMoreText: {
+    fontSize: 14,
+    color: colors.textSecondary,
   },
 });

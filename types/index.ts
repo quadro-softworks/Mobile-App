@@ -54,8 +54,17 @@ export interface User {
   export interface BusStop {
     id: string;
     name: string;
-    coordinates: Coordinates;
-    routes: string[];
+    location: {
+      latitude: number;
+      longitude: number;
+    };
+    capacity: number;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+    // Legacy fields for backward compatibility
+    coordinates?: Coordinates;
+    routes?: string[];
     approachingBuses?: Bus[];
   }
   

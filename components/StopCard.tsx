@@ -74,19 +74,35 @@ export const StopCard: React.FC<StopCardProps> = ({
           <View style={styles.infoItem}>
             <Ionicons name="location-sharp" size={16} color={colors.textSecondary} />
             <Text style={styles.infoText}>
-              {stop.coordinates.latitude.toFixed(6)}, {stop.coordinates.longitude.toFixed(6)}
+              {(stop.location?.latitude || stop.coordinates?.latitude || 0).toFixed(6)}, {(stop.location?.longitude || stop.coordinates?.longitude || 0).toFixed(6)}
             </Text>
           </View>
-          
+
           <View style={styles.infoItem}>
-            <Ionicons name="bus" size={16} color={colors.textSecondary} />
+            <Ionicons name="people" size={16} color={colors.textSecondary} />
             <Text style={styles.infoText}>
-              {stop.routes.length} {stop.routes.length === 1 ? 'route' : 'routes'}
+              Capacity: {stop.capacity || 'Unknown'}
+            </Text>
+          </View>
+
+          {stop.routes && stop.routes.length > 0 && (
+            <View style={styles.infoItem}>
+              <Ionicons name="bus" size={16} color={colors.textSecondary} />
+              <Text style={styles.infoText}>
+                {stop.routes.length} {stop.routes.length === 1 ? 'route' : 'routes'}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.infoItem}>
+            <Ionicons name={stop.is_active ? 'checkmark-circle' : 'close-circle'} size={16} color={stop.is_active ? colors.success : colors.error} />
+            <Text style={[styles.infoText, { color: stop.is_active ? colors.success : colors.error }]}>
+              {stop.is_active ? 'Active' : 'Inactive'}
             </Text>
           </View>
         </View>
         
-        {stop.routes.length > 0 && (
+        {stop.routes && stop.routes.length > 0 && (
           <View style={styles.routesContainer}>
             {stop.routes.map((route, index) => (
               <View key={index} style={styles.routeTag}>
