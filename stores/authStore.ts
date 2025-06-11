@@ -84,6 +84,9 @@ export const useAuthStore = create<AuthStore>()(
 
           console.log('Setting user and token in store:', { user, token });
 
+          // Also save token to AsyncStorage for backward compatibility
+          await AsyncStorage.setItem('auth_token', token);
+
           set({
             user: user,
             token: token,
@@ -101,6 +104,8 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true });
         try {
           await authApi.logout();
+          // Also clear AsyncStorage token
+          await AsyncStorage.removeItem('auth_token');
           set({ user: null, token: null, isLoading: false });
         } catch (error) {
           set({ error: (error as Error).message, isLoading: false });

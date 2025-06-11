@@ -17,7 +17,7 @@ import * as Location from 'expo-location';
 import { colors } from '@/constants/colors';
 import { useIncidentStore } from '@/stores/incidentStore';
 import { useBusStore } from '@/stores/busStore';
-import { CreateIncidentRequest, IncidentLocation } from '@/services/incidentApi';
+import { CreateIncidentRequest, IncidentLocation, incidentApi } from '@/services/incidentApi';
 import { Bus, Route } from '@/types';
 
 interface ReportType {
@@ -56,6 +56,7 @@ export default function ReportScreen() {
   const [currentLocation, setCurrentLocation] = useState<IncidentLocation | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [isRefreshingReports, setIsRefreshingReports] = useState(false);
 
   // Local state for display
   const [reports, setReports] = useState<Report[]>([]);
@@ -115,6 +116,25 @@ export default function ReportScreen() {
       Alert.alert('Location Error', 'Failed to get current location. Please try again.');
     } finally {
       setIsGettingLocation(false);
+    }
+  };
+
+  const refreshReports = async () => {
+    setIsRefreshingReports(true);
+    try {
+      await fetchUserIncidents();
+    } catch (error) {
+      console.error('Error refreshing reports:', error);
+    } finally {
+      setIsRefreshingReports(false);
+    }
+  };
+
+  const debugAuth = async () => {
+    try {
+      await incidentApi.debugAuthToken();
+    } catch (error) {
+      console.error('Debug auth error:', error);
     }
   };
 
@@ -217,15 +237,66 @@ export default function ReportScreen() {
     </TouchableOpacity>
   );
 
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case 'HIGH': return colors.error;
+      case 'MEDIUM': return colors.warning;
+      case 'LOW': return colors.success;
+      default: return colors.textSecondary;
+    }
+  };
+
+  const getBusName = (busId?: string) => {
+    if (!busId) return null;
+    const bus = buses.find(b => b.id === busId);
+    return bus?.name || `Bus ${busId}`;
+  };
+
+  const getRouteName = (routeId?: string) => {
+    if (!routeId) return null;
+    const route = routes.find(r => r.id === routeId);
+    return route?.name || `Route ${routeId}`;
+  };
+
   const renderReport = (report: Report) => (
     <View key={report.id} style={styles.reportCard}>
       <View style={styles.reportHeader}>
-        <Text style={styles.reportTitle}>{report.title}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(report.status) }]}>
-          <Text style={styles.statusText}>{report.status.toUpperCase()}</Text>
+        <View style={styles.reportTitleContainer}>
+          <Text style={styles.reportTitle}>Vehicle Issue Report</Text>
+          <View style={styles.reportBadges}>
+            {report.severity && (
+              <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(report.severity) }]}>
+                <Text style={styles.severityText}>{report.severity}</Text>
+              </View>
+            )}
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(report.status) }]}>
+              <Text style={styles.statusText}>{report.status.toUpperCase()}</Text>
+            </View>
+          </View>
         </View>
       </View>
+
       <Text style={styles.reportDescription}>{report.description}</Text>
+
+      {/* Related Bus and Route */}
+      {(report.related_bus_id || report.related_route_id) && (
+        <View style={styles.relatedInfoContainer}>
+          {report.related_bus_id && (
+            <View style={styles.relatedItem}>
+              <Ionicons name="bus" size={14} color={colors.primary} />
+              <Text style={styles.relatedText}>{getBusName(report.related_bus_id)}</Text>
+            </View>
+          )}
+          {report.related_route_id && (
+            <View style={styles.relatedItem}>
+              <Ionicons name="map" size={14} color={colors.primary} />
+              <Text style={styles.relatedText}>{getRouteName(report.related_route_id)}</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Location */}
       {report.location && (
         <View style={styles.locationContainer}>
           <Ionicons name="location" size={14} color={colors.textSecondary} />
@@ -237,7 +308,11 @@ export default function ReportScreen() {
           </Text>
         </View>
       )}
-      <Text style={styles.reportTimestamp}>{formatDate(report.timestamp)}</Text>
+
+      <View style={styles.reportFooter}>
+        <Text style={styles.reportTimestamp}>{formatDate(report.timestamp)}</Text>
+        <Text style={styles.reportId}>ID: {report.id.slice(-8)}</Text>
+      </View>
     </View>
   );
 
@@ -258,16 +333,58 @@ export default function ReportScreen() {
           </View>
         </View>
 
-        {reports.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent Reports</Text>
-            <Text style={styles.sectionSubtitle}>Your submitted reports</Text>
-            
+        {/* Reports History Section */}
+        <View style={styles.section}>
+          <View style={styles.reportsHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>Report History</Text>
+              <Text style={styles.sectionSubtitle}>
+                {reports.length > 0
+                  ? `${reports.length} report${reports.length === 1 ? '' : 's'} submitted`
+                  : 'No reports submitted yet'
+                }
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={styles.refreshButton}
+                onPress={debugAuth}
+              >
+                <Text style={{ fontSize: 10, color: colors.primary }}>DEBUG</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.refreshButton}
+                onPress={refreshReports}
+                disabled={isRefreshingReports || incidentLoading}
+              >
+                <Ionicons
+                  name="refresh"
+                  size={20}
+                  color={isRefreshingReports ? colors.textSecondary : colors.primary}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {incidentLoading || isRefreshingReports ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.loadingText}>Loading reports...</Text>
+            </View>
+          ) : reports.length > 0 ? (
             <View style={styles.reportsContainer}>
               {reports.map(renderReport)}
             </View>
-          </View>
-        )}
+          ) : (
+            <View style={styles.emptyReportsContainer}>
+              <Ionicons name="document-text-outline" size={48} color={colors.textSecondary} />
+              <Text style={styles.emptyReportsText}>No reports yet</Text>
+              <Text style={styles.emptyReportsSubtext}>
+                Your submitted incident reports will appear here
+              </Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       {/* Report Modal */}
@@ -588,6 +705,90 @@ const styles = StyleSheet.create({
   reportTimestamp: {
     fontSize: 12,
     color: colors.textSecondary,
+  },
+  reportTitleContainer: {
+    flex: 1,
+  },
+  reportBadges: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  severityBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  severityText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  relatedInfoContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 8,
+  },
+  relatedItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  relatedText: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  reportFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  reportId: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    fontFamily: 'monospace',
+  },
+  reportsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  emptyReportsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  emptyReportsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  emptyReportsSubtext: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: 32,
   },
   modalContainer: {
     flex: 1,

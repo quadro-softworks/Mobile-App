@@ -42,7 +42,22 @@ export interface ValidationError {
 
 // Helper function to get auth headers
 const getAuthHeaders = async () => {
-  const token = await AsyncStorage.getItem('auth_token');
+  // First try to get token from AsyncStorage (for backward compatibility)
+  let token = await AsyncStorage.getItem('auth_token');
+
+  // If not found, try to get from Zustand store (check localStorage for web or AsyncStorage)
+  if (!token) {
+    try {
+      const authStorage = await AsyncStorage.getItem('auth-storage');
+      if (authStorage) {
+        const parsedAuth = JSON.parse(authStorage);
+        token = parsedAuth?.state?.token;
+      }
+    } catch (error) {
+      console.log('Could not get token from auth storage:', error);
+    }
+  }
+
   return {
     'Content-Type': 'application/json',
     ...(token && { 'Authorization': `Bearer ${token}` }),
@@ -92,33 +107,67 @@ export const incidentApi = {
   /**
    * Get user's reported incidents
    */
-  getUserIncidents: async (): Promise<IncidentResponse[]> => {
+  getUserIncidents: async (skip: number = 0, limit: number = 50): Promise<IncidentResponse[]> => {
     try {
       const headers = await getAuthHeaders();
 
-      const response = await fetch(`${API_BASE_URL}/api/issues`, {
+      // Add pagination parameters
+      const url = new URL(`${API_BASE_URL}/api/issues`);
+      url.searchParams.append('skip', skip.toString());
+      url.searchParams.append('limit', limit.toString());
+
+      console.log('Fetching incidents from:', url.toString());
+      console.log('Headers:', headers);
+
+      const response = await fetch(url.toString(), {
         method: 'GET',
         headers,
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.log('Error response:', errorText);
+
         if (response.status === 401) {
           throw new Error('Authentication required. Please log in again.');
         } else if (response.status === 404) {
           // Endpoint might not exist yet, return empty array
           return [];
         } else {
-          throw new Error('Failed to fetch incidents');
+          throw new Error(`Failed to fetch incidents: ${response.status} ${errorText}`);
         }
       }
 
       const result: IncidentResponse[] = await response.json();
+      console.log('Fetched incidents:', result);
       return result;
     } catch (error) {
+      console.error('Error in getUserIncidents:', error);
       if (error instanceof Error) {
         throw error;
       }
       throw new Error('Network error occurred while fetching incidents');
     }
+  },
+
+  /**
+   * Debug function to check auth token
+   */
+  debugAuthToken: async () => {
+    const headers = await getAuthHeaders();
+    console.log('Current auth headers:', headers);
+
+    // Also check AsyncStorage directly
+    const asyncToken = await AsyncStorage.getItem('auth_token');
+    console.log('AsyncStorage auth_token:', asyncToken);
+
+    // Check auth storage
+    const authStorage = await AsyncStorage.getItem('auth-storage');
+    console.log('Auth storage:', authStorage);
+
+    return headers;
   },
 };

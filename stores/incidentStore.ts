@@ -36,12 +36,19 @@ export const useIncidentStore = create<IncidentStore>((set, get) => ({
     }
   },
   
-  fetchUserIncidents: async () => {
+  fetchUserIncidents: async (skip: number = 0, limit: number = 50) => {
     set({ isLoading: true, error: null });
     try {
-      const incidents = await incidentApi.getUserIncidents();
+      console.log('Fetching user incidents with pagination:', { skip, limit });
+
+      // Debug auth token first
+      await incidentApi.debugAuthToken();
+
+      const incidents = await incidentApi.getUserIncidents(skip, limit);
+      console.log('Successfully fetched incidents:', incidents.length);
       set({ incidents, isLoading: false });
     } catch (error) {
+      console.error('Error in fetchUserIncidents:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch incidents';
       set({ error: errorMessage, isLoading: false });
     }
