@@ -43,7 +43,7 @@ interface Report {
 
 export default function ReportScreen() {
   // Store hooks
-  const { reportIncident, incidents, isLoading: incidentLoading, error: incidentError } = useIncidentStore();
+  const { reportIncident, fetchUserIncidents, incidents, isLoading: incidentLoading, error: incidentError } = useIncidentStore();
   const { buses, routes, fetchBuses, fetchRoutes } = useBusStore();
   const { t } = useTranslation();
 
@@ -64,8 +64,9 @@ export default function ReportScreen() {
   useEffect(() => {
     fetchBuses();
     fetchRoutes();
+    fetchUserIncidents();
     getCurrentLocation();
-  }, [fetchBuses, fetchRoutes]);
+  }, [fetchBuses, fetchRoutes, fetchUserIncidents]);
 
   // Convert incidents to reports for display
   useEffect(() => {
@@ -160,6 +161,7 @@ export default function ReportScreen() {
     try {
       const incidentData: CreateIncidentRequest = {
         description: reportDescription.trim(),
+        incident_type: 'VEHICLE_ISSUE',
         location: currentLocation,
         severity: selectedSeverity,
         ...(selectedBus && { related_bus_id: selectedBus.id }),

@@ -62,10 +62,10 @@ export default function DriverTabs() {
         }}
       />
       <Tabs.Screen
-        name="messages"
+        name="notifications"
         options={{
-          title: t('driver.messages'),
-          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" size={size} color={color} />,
+          title: "Notifications",
+          tabBarIcon: ({ color, size }) => <Ionicons name="notifications" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
