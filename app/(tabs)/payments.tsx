@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
+import {
+  View,
+  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Alert,
   Platform,
   Pressable,
-  SafeAreaView // Added SafeAreaView
+  SafeAreaView,
+  Modal,
+  ActivityIndicator,
+  Linking,
+  TextInput
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
@@ -18,6 +22,51 @@ import { Button } from '@/components/ui/Button';
 import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { Route } from '@/types';
+
+// Simple QR Code Component with value-based pattern
+const QRCodeComponent: React.FC<{ value: string; size?: number }> = ({ value, size = 200 }) => {
+  // Generate consistent pattern based on value
+  const generatePattern = (value: string) => {
+    const hash = value.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+
+    return Array.from({ length: 25 }, (_, i) => {
+      const seed = Math.abs(hash + i);
+      return {
+        visible: (seed % 4) !== 0,
+        opacity: (seed % 3) === 0 ? 0.3 : 1
+      };
+    });
+  };
+
+  const pattern = generatePattern(value);
+
+  return (
+    <View style={[styles.qrCodePlaceholder, { width: size, height: size }]}>
+      <View style={styles.qrPattern}>
+        {pattern.map((dot, i) => (
+          <View key={i} style={[
+            styles.qrDot,
+            {
+              backgroundColor: dot.visible ? colors.text : 'transparent',
+              opacity: dot.opacity
+            }
+          ]} />
+        ))}
+      </View>
+      <Text style={styles.qrCodeText}>QR CODE</Text>
+    </View>
+  );
+};
+
+// Chapa Payment Interface
+interface ChapaPaymentResponse {
+  checkout_url: string;
+  tx_ref: string;
+  status: string;
+}
 
 // Mock ticket data
 interface Ticket {
@@ -54,103 +103,198 @@ const mockTickets: Ticket[] = [
   },
 ];
 
-// Mock payment methods
-interface PaymentMethod {
+// Chapa Payment Method (Only provider)
+interface ChapaPaymentMethod {
   id: string;
-  type: 'card' | 'mobile';
   name: string;
-  lastFour?: string;
-  expiryDate?: string;
+  type: 'chapa';
+  description: string;
   isDefault: boolean;
 }
 
-const mockPaymentMethods: PaymentMethod[] = [
-  {
-    id: 'payment-1',
-    type: 'card',
-    name: 'Visa',
-    lastFour: '4242',
-    expiryDate: '12/25',
-    isDefault: true,
-  },
-  {
-    id: 'payment-2',
-    type: 'mobile',
-    name: 'Mobile Money',
-    isDefault: false,
-  },
-];
+const chapaPaymentMethod: ChapaPaymentMethod = {
+  id: 'chapa-1',
+  name: 'Chapa',
+  type: 'chapa',
+  description: 'Pay with Chapa - Cards, Mobile Money, Bank Transfer',
+  isDefault: true,
+};
 
 export default function PaymentsScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { routes, fetchRoutes } = useBusStore();
   const [activeTickets, setActiveTickets] = useState<Ticket[]>(mockTickets);
-  const [paymentMethods] = useState<PaymentMethod[]>(mockPaymentMethods);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [showQRCode, setShowQRCode] = useState(false);
-  const [isPurchasing, setIsPurchasing] = useState(false);
-  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [checkoutUrl, setCheckoutUrl] = useState<string>('');
+  const [paymentStep, setPaymentStep] = useState<'checkout' | 'external' | 'callback' | 'success'>('checkout');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Origin and Destination selection
+  const [origin, setOrigin] = useState('');
+  const [destination, setDestination] = useState('');
+  const [originSuggestions, setOriginSuggestions] = useState<string[]>([]);
+  const [destinationSuggestions, setDestinationSuggestions] = useState<string[]>([]);
+  const [showOriginSuggestions, setShowOriginSuggestions] = useState(false);
+  const [showDestinationSuggestions, setShowDestinationSuggestions] = useState(false);
+  const [routePrice, setRoutePrice] = useState<number>(0);
   
+  // Mock bus stops for autocomplete
+  const busStops = [
+    'Addis Ababa University', 'Bole Airport', 'Merkato', 'Piazza', 'Stadium',
+    'Arat Kilo', 'Mexico', 'Kazanchis', 'Legehar', 'Gotera', 'Megenagna',
+    'Sarbet', 'Shiromeda', 'Kotebe', 'Kaliti', 'Akaki', 'Sebeta', 'Bishoftu'
+  ];
+
   useEffect(() => {
     fetchRoutes();
   }, [fetchRoutes]);
-  
-  const handleBuyTicket = () => {
-    setIsPurchasing(true);
+
+  // Calculate price based on origin and destination
+  useEffect(() => {
+    if (origin && destination && origin !== destination) {
+      // Generate consistent price based on origin and destination
+      const priceHash = (origin + destination).split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0);
+        return a & a;
+      }, 0);
+      const price = Math.abs(priceHash % 25) + 15; // Price between 15-40
+      setRoutePrice(price);
+    } else {
+      setRoutePrice(0);
+    }
+  }, [origin, destination]);
+
+  const handleOriginChange = (text: string) => {
+    setOrigin(text);
+    if (text.length > 0) {
+      const suggestions = busStops.filter(stop =>
+        stop.toLowerCase().includes(text.toLowerCase())
+      );
+      setOriginSuggestions(suggestions);
+      setShowOriginSuggestions(true);
+    } else {
+      setShowOriginSuggestions(false);
+    }
+  };
+
+  const handleDestinationChange = (text: string) => {
+    setDestination(text);
+    if (text.length > 0) {
+      const suggestions = busStops.filter(stop =>
+        stop.toLowerCase().includes(text.toLowerCase()) && stop !== origin
+      );
+      setDestinationSuggestions(suggestions);
+      setShowDestinationSuggestions(true);
+    } else {
+      setShowDestinationSuggestions(false);
+    }
+  };
+
+  const selectOrigin = (stop: string) => {
+    setOrigin(stop);
+    setShowOriginSuggestions(false);
+  };
+
+  const selectDestination = (stop: string) => {
+    setDestination(stop);
+    setShowDestinationSuggestions(false);
   };
   
-  const handleSelectRoute = (route: Route) => {
-    setSelectedRoute(route);
+  // Simulate Chapa checkout URL generation
+  const generateChapaCheckoutUrl = (origin: string, destination: string, price: number): string => {
+    const txRef = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    return `https://checkout.chapa.co/checkout/payment/${txRef}?amount=${price}&currency=ETB&email=${user?.email}&first_name=${user?.name?.split(' ')[0]}&last_name=${user?.name?.split(' ')[1] || ''}&phone_number=${user?.phone || ''}&tx_ref=${txRef}&callback_url=https://guzosync.app/payment/callback&return_url=https://guzosync.app/payment/success&customization[title]=GuzoSync Bus Ticket&customization[description]=Bus ticket from ${origin} to ${destination}`;
   };
-  
-  const handleConfirmPurchase = () => {
-    if (!selectedRoute) {
-      Alert.alert('Error', 'Please select a route');
+
+  const handlePayForRoute = async () => {
+    if (!origin || !destination) {
+      Alert.alert('Error', 'Please select both origin and destination');
       return;
     }
-    
-    // Create a new ticket
-    const newTicket: Ticket = {
-      id: `ticket-${Date.now()}`,
-      routeId: selectedRoute.id,
-      routeName: selectedRoute.name,
-      price: Math.floor(Math.random() * 20) + 10, // Random price between 10-30
-      purchaseDate: new Date().toISOString(),
-      expiryDate: new Date(Date.now() + 86400000 * 7).toISOString(), // Valid for 7 days
-      isUsed: false,
-      qrData: `TICKET-${selectedRoute.id}-${Date.now()}`,
-    };
-    
-    setActiveTickets([newTicket, ...activeTickets]);
-    setIsPurchasing(false);
-    setSelectedRoute(null);
-    
-    Alert.alert(
-      'Success',
-      'Ticket purchased successfully!',
-      [
-        {
-          text: 'View Ticket',
-          onPress: () => {
-            setSelectedTicket(newTicket);
-            setShowQRCode(true);
-          },
-        },
-        {
-          text: 'OK',
-          style: 'cancel',
-        },
-      ]
-    );
+
+    if (origin === destination) {
+      Alert.alert('Error', 'Origin and destination cannot be the same');
+      return;
+    }
+
+    setIsProcessing(true);
+    setPaymentStep('checkout');
+    setShowPaymentModal(true);
+
+    try {
+      // Step 1: Generate checkout URL (simulate backend call)
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const url = generateChapaCheckoutUrl(origin, destination, routePrice);
+      setCheckoutUrl(url);
+      setPaymentStep('external');
+      setIsProcessing(false);
+
+    } catch (error) {
+      Alert.alert('Error', 'Failed to generate checkout URL. Please try again.');
+      setShowPaymentModal(false);
+      setPaymentStep('checkout');
+      setIsProcessing(false);
+    }
+  };
+
+  const handleExternalPaymentComplete = async () => {
+    setPaymentStep('callback');
+    setIsProcessing(true);
+
+    try {
+      // Step 2: Simulate payment callback processing
+      await new Promise(resolve => setTimeout(resolve, 2500));
+
+      // Step 3: Register payment in backend (simulated)
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // Step 4: Generate ticket and QR code with unique data
+      const ticketId = `ticket-${Date.now()}`;
+      const qrData = `TICKET-${origin.replace(/\s+/g, '')}-${destination.replace(/\s+/g, '')}-${ticketId}-${routePrice}`;
+
+      const newTicket: Ticket = {
+        id: ticketId,
+        routeId: `route-${origin}-${destination}`,
+        routeName: `${origin} to ${destination}`,
+        price: routePrice,
+        purchaseDate: new Date().toISOString(),
+        expiryDate: new Date(Date.now() + 86400000 * 7).toISOString(), // Valid for 7 days
+        isUsed: false,
+        qrData: qrData,
+      };
+
+      setActiveTickets([newTicket, ...activeTickets]);
+      setSelectedTicket(newTicket);
+      setPaymentStep('success');
+      setIsProcessing(false);
+
+    } catch (error) {
+      Alert.alert('Error', 'Payment processing failed. Please contact support.');
+      setShowPaymentModal(false);
+      setPaymentStep('checkout');
+      setIsProcessing(false);
+    }
+  };
+
+  const handleClosePaymentModal = () => {
+    setShowPaymentModal(false);
+    setPaymentStep('checkout');
+    setIsProcessing(false);
+    setCheckoutUrl('');
+  };
+
+  const handleViewTicket = () => {
+    setShowPaymentModal(false);
+    setPaymentStep('checkout');
+    setIsProcessing(false);
+    setCheckoutUrl('');
+    setShowQRCode(true);
   };
   
-  const handleCancelPurchase = () => {
-    setIsPurchasing(false);
-    setSelectedRoute(null);
-  };
-  
-  const handleViewTicket = (ticket: Ticket) => {
+  const handleViewExistingTicket = (ticket: Ticket) => {
     setSelectedTicket(ticket);
     setShowQRCode(true);
   };
@@ -160,13 +304,7 @@ export default function PaymentsScreen() {
     setSelectedTicket(null);
   };
   
-  const handleAddPaymentMethod = () => {
-    Alert.alert('Add Payment Method', 'This feature would allow adding a new payment method.');
-  };
-  
-  const handleManagePaymentMethods = () => {
-    router.push('/payment-methods');
-  };
+
   
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -222,7 +360,7 @@ export default function PaymentsScreen() {
               </View>
               
               <View style={styles.qrCodeWrapper}>
-                <Ionicons name="qr-code" size={200} color={colors.text} />
+                <QRCodeComponent value={selectedTicket.qrData} size={200} />
               </View>
               
               <Text style={styles.qrCodeId}>{selectedTicket.qrData}</Text>
@@ -262,126 +400,234 @@ export default function PaymentsScreen() {
     );
   }
   
-  if (isPurchasing) {
-    return (
+  // Payment Modal Component
+  const PaymentModal = () => (
+    <Modal
+      visible={showPaymentModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={handleClosePaymentModal}
+    >
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity
+            onPress={handleClosePaymentModal}
+            style={styles.modalCloseButton}
+          >
+            <Ionicons name="close" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>Chapa Payment</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <View style={styles.modalContent}>
+          {paymentStep === 'checkout' && (
+            <View style={styles.processingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.processingTitle}>Generating Checkout URL</Text>
+              <Text style={styles.processingText}>
+                Creating secure Chapa payment link...
+              </Text>
+            </View>
+          )}
+
+          {paymentStep === 'external' && checkoutUrl && (
+            <View style={styles.checkoutContainer}>
+              <View style={styles.checkoutIcon}>
+                <Ionicons name="card" size={60} color={colors.primary} />
+              </View>
+              <Text style={styles.checkoutTitle}>Complete Payment</Text>
+              <Text style={styles.checkoutText}>
+                Click the button below to open Chapa payment page and complete your transaction.
+              </Text>
+
+              <TouchableOpacity
+                style={styles.checkoutUrlButton}
+                onPress={() => {
+                  Alert.alert(
+                    'Chapa Payment',
+                    'This will open the Chapa payment page in your browser. Complete the payment and return to the app.',
+                    [
+                      {
+                        text: 'Open Payment Page',
+                        onPress: () => {
+                          // In real app: Linking.openURL(checkoutUrl)
+                          console.log('Opening Chapa checkout:', checkoutUrl);
+                          // Simulate external payment completion
+                          setTimeout(() => {
+                            handleExternalPaymentComplete();
+                          }, 3000);
+                        }
+                      },
+                      { text: 'Cancel', style: 'cancel' }
+                    ]
+                  );
+                }}
+              >
+                <Ionicons name="open-outline" size={20} color={colors.card} />
+                <Text style={styles.checkoutUrlButtonText}>Open Chapa Payment</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.checkoutNote}>
+                You will be redirected back to the app after payment completion.
+              </Text>
+            </View>
+          )}
+
+          {paymentStep === 'callback' && (
+            <View style={styles.processingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.processingTitle}>Processing Payment</Text>
+              <Text style={styles.processingText}>
+                Verifying payment and generating your ticket...
+              </Text>
+            </View>
+          )}
+
+          {paymentStep === 'success' && selectedTicket && (
+            <View style={styles.qrSuccessContainer}>
+              <View style={styles.successIcon}>
+                <Ionicons name="checkmark-circle" size={60} color={colors.success} />
+              </View>
+              <Text style={styles.successTitle}>Payment Successful!</Text>
+              <Text style={styles.successText}>Your ticket is ready</Text>
+
+              <View style={styles.modalQrContainer}>
+                <QRCodeComponent value={selectedTicket.qrData} size={150} />
+              </View>
+
+              <Text style={styles.modalTicketInfo}>
+                {selectedTicket.routeName} - ${selectedTicket.price.toFixed(2)}
+              </Text>
+
+              <TouchableOpacity
+                style={styles.viewTicketButton}
+                onPress={handleViewTicket}
+              >
+                <Text style={styles.viewTicketButtonText}>View Full Ticket</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+
+  // Remove old purchase flow - now integrated into main screen
+  
+  return (
+    <>
+      <PaymentModal />
       <SafeAreaView style={styles.safeAreaContainer}> {/* Use SafeAreaView */}
-        <ScrollView 
+        <ScrollView
           // style={styles.container} // Remove container style if it only has flex and background
           contentContainerStyle={styles.scrollContent}
           style={styles.contentContainerPadded} // Add padding to ScrollView itself
         >
-          <View style={styles.purchaseHeader}>
-            <TouchableOpacity 
-              onPress={handleCancelPurchase}
-              style={styles.backButton}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="arrow-back" size={24} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={styles.purchaseTitle}>Buy Ticket</Text>
-            <View style={{ width: 24 }} />
-          </View>
-          
-          <Text style={styles.purchaseSubtitle}>Select a route to purchase a ticket</Text>
-          
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Available Routes</Text>
-            {routes.map((route) => (
-              <Pressable
-                key={route.id}
-                style={({ pressed }) => [
-                  styles.routeOption,
-                  selectedRoute?.id === route.id && styles.selectedRouteOption,
-                  pressed && !selectedRoute?.id && styles.routeOptionPressed
-                ]}
-                onPress={() => handleSelectRoute(route)}
-              >
-                <View style={[styles.routeColorIndicator, { backgroundColor: route.color }]} />
-                <View style={styles.routeOptionContent}>
-                  <Text style={styles.routeOptionName}>{route.name}</Text>
-                  <Text style={styles.routeOptionDetails}>
-                    {route.startPoint} to {route.endPoint}
-                  </Text>
-                </View>
-                {selectedRoute?.id === route.id && (
-                  <View style={styles.selectedIndicator} />
-                )}
-              </Pressable>
-            ))}
-          </View>
-          
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Payment Method</Text>
-            <Card style={styles.paymentCard}>
-              {paymentMethods.map((method, index) => (
-                <React.Fragment key={method.id}>
-                  <View style={styles.paymentMethod}>
-                    <Ionicons name="card" size={20} color={colors.primary} />
-                    <View style={styles.paymentMethodDetails}>
-                      <Text style={styles.paymentMethodName}>{method.name}</Text>
-                      {method.lastFour && (
-                        <Text style={styles.paymentMethodInfo}>
-                          •••• {method.lastFour}
-                          {method.expiryDate && ` | Expires ${method.expiryDate}`}
-                        </Text>
-                      )}
-                    </View>
-                    {method.isDefault && (
-                      <View style={styles.defaultBadge}>
-                        <Text style={styles.defaultBadgeText}>Default</Text>
-                      </View>
-                    )}
-                  </View>
-                  {index < paymentMethods.length - 1 && <View style={styles.divider} />}
-                </React.Fragment>
-              ))}
-            </Card>
-          </View>
-          
-          <View style={styles.buttonContainer}>
-            <Button
-              title="Purchase Ticket"
-              onPress={handleConfirmPurchase}
-              disabled={!selectedRoute}
-              style={styles.purchaseButton}
-              size="lg"
-            />
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-  
-  return (
-    <SafeAreaView style={styles.safeAreaContainer}> {/* Use SafeAreaView */}
-      <ScrollView 
-        // style={styles.container} // Remove container style if it only has flex and background
-        contentContainerStyle={styles.scrollContent} 
-        style={styles.contentContainerPadded} // Add padding to ScrollView itself
-      >
         <View style={styles.header}>
           <Text style={styles.title}>Tickets & Payments</Text>
           <Text style={styles.subtitle}>Manage your tickets and payment methods</Text>
         </View>
         
+        {/* Origin and Destination Selection */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Your Tickets</Text>
-            <Button
-              title="Buy Ticket"
-              onPress={handleBuyTicket}
-              variant="primary"
-              size="sm"
-              icon={<Ionicons name="add" size={16} color={colors.card} />}
-              iconPosition="left"
-            />
+          <Text style={styles.sectionTitle}>Select Route</Text>
+          <Text style={styles.sectionSubtitle}>Choose your origin and destination</Text>
+
+          {/* Origin Input */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>From</Text>
+            <View style={styles.autocompleteContainer}>
+              <View style={styles.textInputWrapper}>
+                <Ionicons name="location" size={20} color={colors.primary} style={styles.inputIcon} />
+                <TextInput
+                  placeholder="Enter origin"
+                  value={origin}
+                  onChangeText={handleOriginChange}
+                  style={styles.locationInput}
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+              {showOriginSuggestions && originSuggestions.length > 0 && (
+                <View style={styles.suggestionsContainer}>
+                  {originSuggestions.map((suggestion, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.suggestionItem}
+                      onPress={() => selectOrigin(suggestion)}
+                    >
+                      <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
+                      <Text style={styles.suggestionText}>{suggestion}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
           </View>
+
+          {/* Destination Input */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>To</Text>
+            <View style={styles.autocompleteContainer}>
+              <View style={styles.textInputWrapper}>
+                <Ionicons name="flag" size={20} color={colors.primary} style={styles.inputIcon} />
+                <TextInput
+                  placeholder="Enter destination"
+                  value={destination}
+                  onChangeText={handleDestinationChange}
+                  style={styles.locationInput}
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+              {showDestinationSuggestions && destinationSuggestions.length > 0 && (
+                <View style={styles.suggestionsContainer}>
+                  {destinationSuggestions.map((suggestion, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.suggestionItem}
+                      onPress={() => selectDestination(suggestion)}
+                    >
+                      <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
+                      <Text style={styles.suggestionText}>{suggestion}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Route Summary and Pay Button */}
+          {origin && destination && origin !== destination && (
+            <View style={styles.routeSummary}>
+              <View style={styles.routeInfo}>
+                <Text style={styles.routeText}>{origin} → {destination}</Text>
+                <Text style={styles.priceText}>${routePrice}.00</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.payForRouteButton}
+                onPress={handlePayForRoute}
+                activeOpacity={0.8}
+              >
+                <View style={styles.payButtonContent}>
+                  <Ionicons name="card" size={20} color={colors.card} />
+                  <Text style={styles.payButtonText}>
+                    Pay ${routePrice}.00
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Your Tickets</Text>
           
           {activeTickets.length > 0 ? (
             activeTickets.map((ticket) => (
               <Pressable
                 key={ticket.id}
-                onPress={() => handleViewTicket(ticket)}
+                onPress={() => handleViewExistingTicket(ticket)}
                 style={({ pressed }) => [
                   styles.ticketCard,
                   pressed ? styles.ticketCardPressed : {}
@@ -426,69 +672,14 @@ export default function PaymentsScreen() {
                 </View>
                 <Text style={styles.emptyTicketsText}>No active tickets</Text>
                 <Text style={styles.emptyTicketsSubtext}>
-                  Purchase a ticket to ride the bus
+                  Select a route above to purchase a ticket
                 </Text>
-                <Button
-                  title="Buy Ticket"
-                  onPress={handleBuyTicket}
-                  style={styles.emptyTicketButton}
-                  icon={<Ionicons name="add" size={16} color={colors.card} />}
-                  iconPosition="left"
-                />
               </View>
             </Card>
           )}
         </View>
         
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Payment Methods</Text>
-          <Card style={styles.paymentCard}>
-            {paymentMethods.map((method, index) => (
-              <React.Fragment key={method.id}>
-                <View style={styles.paymentMethod}>
-                  <Ionicons name="card" size={20} color={colors.primary} />
-                  <View style={styles.paymentMethodDetails}>
-                    <Text style={styles.paymentMethodName}>{method.name}</Text>
-                    {method.lastFour && (
-                      <Text style={styles.paymentMethodInfo}>
-                        •••• {method.lastFour}
-                        {method.expiryDate && ` | Expires ${method.expiryDate}`}
-                      </Text>
-                    )}
-                  </View>
-                  {method.isDefault && (
-                    <View style={styles.defaultBadge}>
-                      <Text style={styles.defaultBadgeText}>Default</Text>
-                    </View>
-                  )}
-                </View>
-                {index < paymentMethods.length - 1 && <View style={styles.divider} />}
-              </React.Fragment>
-            ))}
-            
-            <Pressable 
-              style={({ pressed }) => [
-                styles.addPaymentMethod,
-                pressed ? styles.addPaymentMethodPressed : {}
-              ]}
-              onPress={handleAddPaymentMethod}
-            >
-              <Ionicons name="add" size={20} color={colors.primary} />
-              <Text style={styles.addPaymentMethodText}>Add Payment Method</Text>
-            </Pressable>
-          </Card>
-          
-          <Pressable 
-            style={({ pressed }) => [
-              styles.managePaymentsButton,
-              pressed ? styles.managePaymentsButtonPressed : {}
-            ]}
-            onPress={handleManagePaymentMethods}
-          >
-            <Text style={styles.managePaymentsText}>Manage Payment Methods</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.primary} />
-          </Pressable>
-        </View>
+        {/* Payment methods section removed - now integrated into route selection */}
         
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Purchase History</Text>
@@ -505,6 +696,7 @@ export default function PaymentsScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+    </>
   );
 }
 
@@ -575,7 +767,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   ticketHeader: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
@@ -589,6 +781,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.text,
     marginLeft: 8,
+    flex: 1,
+    flexWrap: 'wrap',
   },
   ticketPrice: {
     fontSize: 16,
@@ -829,7 +1023,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 16,
+    alignItems: 'center',
+    marginVertical: 24,
+    marginBottom: 32,
   },
   qrCodeId: {
     fontSize: 14,
@@ -863,6 +1059,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',
+    marginBottom: 40,
   },
   purchaseHeader: {
     flexDirection: 'row',
@@ -883,54 +1080,352 @@ const styles = StyleSheet.create({
     // paddingHorizontal: 20, // Removed, handled by parent
     marginBottom: 24,
   },
-  routeOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 12,
-  },
-  routeOptionPressed: {
-    backgroundColor: colors.highlight,
-  },
-  selectedRouteOption: {
-    backgroundColor: colors.highlight,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  routeColorIndicator: {
-    width: 12,
-    height: 40,
-    borderRadius: 6,
-    marginRight: 12,
-  },
-  routeOptionContent: {
-    flex: 1,
-  },
-  routeOptionName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  routeOptionDetails: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  selectedIndicator: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  // Removed duplicate route styles - using updated ones below
   buttonContainer: {
     // paddingHorizontal: 20, // Removed, handled by parent
     marginBottom: 20,
   },
   purchaseButton: {
     marginBottom: 12,
+  },
+  // QR Code Component Styles
+  qrCodePlaceholder: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  qrPattern: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: '80%',
+    height: '80%',
+    justifyContent: 'space-between',
+    alignContent: 'space-between',
+  },
+  qrDot: {
+    width: '18%',
+    height: '18%',
+    borderRadius: 2,
+  },
+  qrCodeText: {
+    position: 'absolute',
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: colors.textSecondary,
+    bottom: 4,
+  },
+  // Payment Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalCloseButton: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  modalContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  processingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  processingTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  processingText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  checkoutUrlContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  checkoutUrlLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 12,
+  },
+  checkoutUrlButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    gap: 8,
+  },
+  checkoutUrlButtonText: {
+    color: colors.card,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  qrSuccessContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  successIcon: {
+    marginBottom: 16,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  successText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    marginBottom: 32,
+  },
+  modalQrContainer: {
+    marginBottom: 24,
+  },
+  modalTicketInfo: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  paymentNote: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
+  },
+  // Route Selection Styles
+  sectionSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 16,
+    marginTop: -8,
+  },
+  routeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  selectedRouteOption: {
+    borderColor: colors.success,
+    backgroundColor: colors.highlight,
+  },
+  routeOptionPressed: {
+    opacity: 0.8,
+  },
+  routeColorIndicator: {
+    width: 4,
+    height: 40,
+    borderRadius: 2,
+    marginRight: 16,
+  },
+  routeOptionContent: {
+    flex: 1,
+  },
+  routeOptionName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  routeOptionDetails: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  routePrice: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  selectedIndicator: {
+    marginLeft: 12,
+  },
+  payForRouteButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  payButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  payButtonText: {
+    color: colors.card,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Enhanced Modal Styles
+  checkoutContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  checkoutIcon: {
+    marginBottom: 24,
+  },
+  checkoutTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  checkoutText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+  checkoutNote: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 16,
+    fontStyle: 'italic',
+  },
+  viewTicketButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  viewTicketButtonText: {
+    color: colors.card,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Origin/Destination Input Styles
+  inputContainer: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  autocompleteContainer: {
+    position: 'relative',
+  },
+  textInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  locationInput: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.text,
+  },
+  suggestionsContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderTopWidth: 0,
+    maxHeight: 200,
+    zIndex: 1000,
+    elevation: 5, // Android shadow
+    shadowColor: '#000', // iOS shadow
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  suggestionText: {
+    fontSize: 16,
+    color: colors.text,
+    marginLeft: 8,
+  },
+  routeSummary: {
+    backgroundColor: colors.highlight,
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+  },
+  routeInfo: {
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  routeDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  routeText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  priceText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.primary,
+    textAlign: 'center',
   },
 });
