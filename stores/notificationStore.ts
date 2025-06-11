@@ -53,7 +53,7 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
         createdAt: notification.created_at,
         read: notification.is_read,
         // Normalize type to lowercase for UI compatibility
-        type: notification.type as 'ALERT' | 'INFO' | 'PROMO' | 'SYSTEM',
+        type: notification.type as 'ALERT' | 'INFO' | 'PROMO' | 'SYSTEM' | 'UPDATE',
       }));
 
       set({ notifications: transformedNotifications, isLoading: false });

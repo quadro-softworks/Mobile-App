@@ -198,7 +198,7 @@ export interface Translations {
   // Driver specific
   driver: {
     dashboard: string;
-    messages: string;
+    notifications: string;
     report: string;
     profile: string;
     title: string;
@@ -213,8 +213,8 @@ export interface Translations {
     startTrip: string;
     endTrip: string;
     emergencyAlert: string;
-    noMessages: string;
-    loadingMessages: string;
+    noNotifications: string;
+    loadingNotifications: string;
     sendMessage: string;
     typeMessage: string;
     reportIssue: string;
@@ -473,7 +473,7 @@ const englishTranslations: Translations = {
 
   driver: {
     dashboard: 'Dashboard',
-    messages: 'Messages',
+    notifications: 'Notifications',
     report: 'Report',
     profile: 'Profile',
     title: 'Driver Dashboard',
@@ -488,8 +488,8 @@ const englishTranslations: Translations = {
     startTrip: 'Start Trip',
     endTrip: 'End Trip',
     emergencyAlert: 'Emergency Alert',
-    noMessages: 'No messages available',
-    loadingMessages: 'Loading messages...',
+    noNotifications: 'No notifications available',
+    loadingNotifications: 'Loading notifications...',
     sendMessage: 'Send Message',
     typeMessage: 'Type your message...',
     reportIssue: 'Report Issue',
@@ -684,7 +684,7 @@ const amharicTranslations: Translations = {
 
   driver: {
     dashboard: 'ዳሽቦርድ',
-    messages: 'መልዕክቶች',
+    notifications: 'ማሳወቂያዎች',
     report: 'ሪፖርት',
     profile: 'መገለጫ',
     title: 'የሹፌር ዳሽቦርድ',
@@ -699,8 +699,8 @@ const amharicTranslations: Translations = {
     startTrip: 'ጉዞ ጀምር',
     endTrip: 'ጉዞ አጠናቅቅ',
     emergencyAlert: 'የአደጋ ጊዜ ማንቂያ',
-    noMessages: 'ምንም መልዕክቶች የሉም',
-    loadingMessages: 'መልዕክቶችን በመጫን ላይ...',
+    noNotifications: 'ምንም ማሳወቂያዎች የሉም',
+    loadingNotifications: 'ማሳወቂያዎችን በመጫን ላይ...',
     sendMessage: 'መልዕክት ላክ',
     typeMessage: 'መልዕክትዎን ይተይቡ...',
     reportIssue: 'ችግር ሪፖርት አድርግ',

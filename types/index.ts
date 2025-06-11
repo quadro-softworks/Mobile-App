@@ -100,7 +100,7 @@ export interface User {
     user_id: string;
     title: string;
     message: string;
-    type: 'ALERT' | 'INFO' | 'PROMO' | 'SYSTEM';
+    type: 'ALERT' | 'INFO' | 'PROMO' | 'SYSTEM' | 'UPDATE';
     is_read: boolean;
     created_at: string;
     updated_at: string;
