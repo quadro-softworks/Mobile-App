@@ -10,6 +10,7 @@ export interface IncidentLocation {
 
 export interface CreateIncidentRequest {
   description: string;
+  incident_type: 'VEHICLE_ISSUE';
   location: IncidentLocation;
   related_bus_id?: string;
   related_route_id?: string;
@@ -22,6 +23,7 @@ export interface IncidentResponse {
   id: string;
   reported_by_user_id: string;
   description: string;
+  incident_type: 'VEHICLE_ISSUE';
   location: IncidentLocation;
   related_bus_id?: string;
   related_route_id?: string;
@@ -55,8 +57,8 @@ export const incidentApi = {
   reportIncident: async (incidentData: CreateIncidentRequest): Promise<IncidentResponse> => {
     try {
       const headers = await getAuthHeaders();
-      
-      const response = await fetch(`${API_BASE_URL}/api/drivers/incidents`, {
+
+      const response = await fetch(`${API_BASE_URL}/api/issues/report`, {
         method: 'POST',
         headers,
         body: JSON.stringify(incidentData),
@@ -88,13 +90,13 @@ export const incidentApi = {
   },
 
   /**
-   * Get user's reported incidents (if endpoint exists)
+   * Get user's reported incidents
    */
   getUserIncidents: async (): Promise<IncidentResponse[]> => {
     try {
       const headers = await getAuthHeaders();
-      
-      const response = await fetch(`${API_BASE_URL}/api/drivers/incidents`, {
+
+      const response = await fetch(`${API_BASE_URL}/api/issues`, {
         method: 'GET',
         headers,
       });
