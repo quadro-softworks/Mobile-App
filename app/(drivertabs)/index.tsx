@@ -28,8 +28,8 @@ export default function DriverMapScreen() {
 
   // Fetch bus stops from API on component mount
   useEffect(() => {
-    // Fetch more bus stops (100 instead of default 10)
-    fetchBusStops({ ps: 100 });
+    // Fetch ALL bus stops (set very high page size to get all)
+    fetchBusStops({ ps: 1000 });
   }, [fetchBusStops]);
 
   // Transform API bus stops for map display
@@ -148,7 +148,7 @@ export default function DriverMapScreen() {
           <Text style={styles.title}>{t('driver.title')}</Text>
           <Text style={styles.subtitle}>{t('driver.subtitle')}</Text>
           <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
-            Bus stops loaded: {stops.length} | Map stops: {busStopsForMap.length}
+            All bus stops loaded: {stops.length} | Displaying: {busStopsForMap.length}
           </Text>
         </View>
         <View style={styles.dutyToggle}>

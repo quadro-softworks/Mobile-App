@@ -59,8 +59,8 @@ export default function ArrivalsScreen() {
 
   // Fetch bus stops from API on component mount
   useEffect(() => {
-    // Fetch more bus stops (100 instead of default 10)
-    fetchBusStops({ ps: 100 });
+    // Fetch ALL bus stops (set very high page size to get all)
+    fetchBusStops({ ps: 1000 });
   }, [fetchBusStops]);
 
   // Transform API bus stops for map display

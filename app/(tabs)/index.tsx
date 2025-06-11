@@ -37,8 +37,11 @@ export default function MapScreen() {
   }));
 
   // Debug logging
-  console.log('Bus stops count:', stops.length);
-  console.log('Bus stops for map:', busStopsForMap.length);
+  console.log('ALL Bus stops count:', stops.length);
+  console.log('Bus stops for map display:', busStopsForMap.length);
+  if (stops.length > 100) {
+    console.log('✅ Successfully loaded ALL bus stops (more than 100)');
+  }
   
   // Request location permission and get user location
   useEffect(() => {
@@ -71,8 +74,8 @@ export default function MapScreen() {
 
   useEffect(() => {
     fetchBuses();
-    // Fetch more bus stops (100 instead of default 10)
-    fetchBusStops({ ps: 100 });
+    // Fetch ALL bus stops (set very high page size to get all)
+    fetchBusStops({ ps: 1000 });
   }, [fetchBuses, fetchBusStops]);
   
   useEffect(() => {
@@ -136,7 +139,7 @@ export default function MapScreen() {
             <Text style={styles.title}>{t('map.title')}</Text>
             <Text style={styles.subtitle}>{t('map.trackBuses')}</Text>
             <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
-              Bus stops loaded: {stops.length} | Map stops: {busStopsForMap.length}
+              All bus stops loaded: {stops.length} | Displaying: {busStopsForMap.length}
             </Text>
           </View>
         </View>

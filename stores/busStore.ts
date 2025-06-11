@@ -19,6 +19,7 @@ interface BusStore {
   fetchRoutes: () => Promise<void>;
   fetchRouteById: (routeId: string) => Promise<void>;
   fetchBusStops: (params?: SearchParams, append?: boolean) => Promise<void>;
+  fetchAllBusStops: (searchParams?: SearchParams, append?: boolean) => Promise<void>;
   fetchBusStopById: (stopId: string) => Promise<void>;
   setSearchParams: (params: Partial<SearchParams>) => void;
   clearSelectedBus: () => void;
@@ -90,8 +91,8 @@ export const useBusStore = create<BusStore>((set, get) => ({
       const authState = useAuthStore.getState();
       if (!authState.token) {
         console.warn('No authentication token found, using mock data');
-        // Use mock data if no token
-        const mockStops = await busApi.getBusStops(params);
+        // Use mock data if no token - get all available mock stops
+        const mockStops = await busApi.getBusStops({ ...params, ps: 1000 });
         const transformedStops = mockStops.items.map((stop: any) => ({
           ...stop,
           coordinates: {
@@ -105,12 +106,20 @@ export const useBusStore = create<BusStore>((set, get) => ({
           stops: append ? [...get().stops, ...transformedStops] : transformedStops,
           isLoading: false
         });
+        console.log('Loaded', transformedStops.length, 'mock bus stops');
         return;
       }
 
       const searchParams = { ...get().searchParams, ...params };
 
-      // Build query parameters
+      // If requesting a large number of stops, try to get all available
+      if (searchParams.ps && searchParams.ps >= 1000) {
+        console.log('Fetching ALL bus stops from API...');
+        await get().fetchAllBusStops(searchParams, append);
+        return;
+      }
+
+      // Build query parameters for regular fetch
       const queryParams = new URLSearchParams();
       if (searchParams.search) queryParams.append('search', searchParams.search);
       if (searchParams.filterBy) queryParams.append('filter_by', searchParams.filterBy);
@@ -167,9 +176,9 @@ export const useBusStore = create<BusStore>((set, get) => ({
       console.error('Fetch bus stops error:', error);
       console.log('Falling back to mock data');
 
-      // Fallback to mock data
+      // Fallback to mock data - get all available mock stops
       try {
-        const mockStops = await busApi.getBusStops(params);
+        const mockStops = await busApi.getBusStops({ ...params, ps: 1000 });
         const transformedStops = mockStops.items.map((stop: any) => ({
           ...stop,
           coordinates: {
@@ -184,10 +193,99 @@ export const useBusStore = create<BusStore>((set, get) => ({
           error: 'Using offline data - API unavailable',
           isLoading: false
         });
+        console.log('Loaded', transformedStops.length, 'fallback mock bus stops');
       } catch (mockError) {
         console.error('Mock data also failed:', mockError);
         set({ error: (error as Error).message, isLoading: false });
       }
+    }
+  },
+
+  fetchAllBusStops: async (searchParams: SearchParams = {} as SearchParams, append = false) => {
+    try {
+      const authState = useAuthStore.getState();
+      if (!authState.token) {
+        throw new Error('No authentication token found');
+      }
+
+      let allStops: BusStop[] = [];
+      let currentPage = 1;
+      const pageSize = 100; // Fetch in chunks of 100
+      let hasMoreData = true;
+
+      console.log('Starting to fetch ALL bus stops...');
+
+      while (hasMoreData) {
+        const queryParams = new URLSearchParams();
+        if (searchParams.search) queryParams.append('search', searchParams.search);
+        if (searchParams.filterBy) queryParams.append('filter_by', searchParams.filterBy);
+        queryParams.append('pn', currentPage.toString());
+        queryParams.append('ps', pageSize.toString());
+
+        console.log(`Fetching page ${currentPage} with ${pageSize} stops per page...`);
+
+        const response = await fetch(
+          `https://guzosync-fastapi.onrender.com/api/buses/stops?${queryParams.toString()}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${authState.token}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('API Error on page', currentPage, ':', errorData);
+          throw new Error(errorData.detail || 'Failed to fetch bus stops');
+        }
+
+        const pageStops: BusStop[] = await response.json();
+        console.log(`Fetched ${pageStops.length} stops from page ${currentPage}`);
+
+        if (pageStops.length === 0 || pageStops.length < pageSize) {
+          hasMoreData = false;
+        }
+
+        allStops = [...allStops, ...pageStops];
+        currentPage++;
+
+        // Safety limit to prevent infinite loops
+        if (currentPage > 50) {
+          console.warn('Reached maximum page limit (50), stopping fetch');
+          break;
+        }
+      }
+
+      console.log(`Successfully fetched ALL ${allStops.length} bus stops from API`);
+
+      // Transform API response to include legacy fields for backward compatibility
+      const transformedStops = allStops.map(stop => ({
+        ...stop,
+        // Add legacy fields for backward compatibility
+        coordinates: {
+          latitude: stop.location.latitude,
+          longitude: stop.location.longitude,
+        },
+        routes: [], // This would need to be fetched separately or included in the API
+      }));
+
+      const currentStops = get().stops;
+
+      set({
+        stops: append ? [...currentStops, ...transformedStops] : transformedStops,
+        searchParams: {
+          ...searchParams,
+          pn: 1,
+          ps: allStops.length
+        },
+        isLoading: false
+      });
+
+    } catch (error) {
+      console.error('Fetch all bus stops error:', error);
+      throw error; // Re-throw to be caught by the main fetchBusStops method
     }
   },
   
