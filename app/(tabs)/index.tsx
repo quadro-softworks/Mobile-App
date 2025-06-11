@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Text, Platform, SafeAreaView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, Platform, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useRouter } from 'expo-router';
 import { useBusStore } from '@/stores/busStore';
@@ -7,6 +7,7 @@ import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
 import { Bus } from '@/types';
+import * as Location from 'expo-location';
 
 
 export default function MapScreen() {
@@ -16,6 +17,8 @@ export default function MapScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredBuses, setFilteredBuses] = useState<Bus[]>([]);
   const [isMapFullScreen, setMapFullScreen] = useState(false);
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [locationPermission, setLocationPermission] = useState<boolean>(false);
 
   // Transform API bus stops for map display
   const busStopsForMap = stops.map(stop => ({
@@ -37,9 +40,39 @@ export default function MapScreen() {
   console.log('Bus stops count:', stops.length);
   console.log('Bus stops for map:', busStopsForMap.length);
   
+  // Request location permission and get user location
+  useEffect(() => {
+    const requestLocationPermission = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          setLocationPermission(true);
+          const location = await Location.getCurrentPositionAsync({});
+          setUserLocation({
+            lat: location.coords.latitude,
+            lng: location.coords.longitude
+          });
+        } else {
+          setLocationPermission(false);
+          Alert.alert(
+            'Location Permission',
+            'Location permission is required to show your position on the map.',
+            [{ text: 'OK' }]
+          );
+        }
+      } catch (error) {
+        console.error('Error requesting location permission:', error);
+        setLocationPermission(false);
+      }
+    };
+
+    requestLocationPermission();
+  }, []);
+
   useEffect(() => {
     fetchBuses();
-    fetchBusStops();
+    // Fetch more bus stops (100 instead of default 10)
+    fetchBusStops({ ps: 100 });
   }, [fetchBuses, fetchBusStops]);
   
   useEffect(() => {
@@ -62,6 +95,36 @@ export default function MapScreen() {
   
   const toggleMapFullScreen = () => {
     setMapFullScreen(!isMapFullScreen);
+  };
+
+  const centerOnUserLocation = async () => {
+    if (!locationPermission) {
+      Alert.alert(
+        'Location Permission Required',
+        'Please enable location permission to use this feature.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      const location = await Location.getCurrentPositionAsync({});
+      const newLocation = {
+        lat: location.coords.latitude,
+        lng: location.coords.longitude
+      };
+      setUserLocation(newLocation);
+
+      // You could also send a message to the WebView to center the map
+      // webViewRef?.postMessage(JSON.stringify({
+      //   type: 'centerOnLocation',
+      //   lat: newLocation.lat,
+      //   lng: newLocation.lng
+      // }));
+    } catch (error) {
+      console.error('Error getting current location:', error);
+      Alert.alert('Error', 'Unable to get your current location.');
+    }
   };
   
   return (
@@ -111,12 +174,52 @@ export default function MapScreen() {
                 <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
                 <script>
                   mapboxgl.accessToken = 'pk.eyJ1IjoiYmFza2V0bzEyMyIsImEiOiJjbTlqZWVsdzQwZWs5MmtyMDN0b29jMjU1In0.CUIyg0uNKnAfe55aXJ0bBA';
+
+                  // Use user location if available, otherwise default to Addis Ababa
+                  const userLoc = ${JSON.stringify(userLocation)};
+                  const mapCenter = userLoc ? [userLoc.lng, userLoc.lat] : [38.7578, 9.0301];
+                  const mapZoom = userLoc ? 14 : 12;
+
                   const map = new mapboxgl.Map({
                     container: 'map',
                     style: 'mapbox://styles/mapbox/streets-v12',
-                    center: [38.7578, 9.0301], // Addis Ababa
-                    zoom: 12
+                    center: mapCenter,
+                    zoom: mapZoom
                   });
+
+                  // Add user location marker if available
+                  if (userLoc) {
+                    const userMarkerEl = document.createElement('div');
+                    userMarkerEl.className = 'user-location-marker';
+                    userMarkerEl.style.width = '20px';
+                    userMarkerEl.style.height = '20px';
+                    userMarkerEl.style.borderRadius = '50%';
+                    userMarkerEl.style.backgroundColor = '#007AFF';
+                    userMarkerEl.style.border = '3px solid #fff';
+                    userMarkerEl.style.boxShadow = '0 0 10px rgba(0,122,255,0.5)';
+                    userMarkerEl.style.cursor = 'pointer';
+
+                    // Add pulsing animation
+                    userMarkerEl.style.animation = 'pulse 2s infinite';
+
+                    // Add CSS animation for pulsing effect
+                    const style = document.createElement('style');
+                    style.textContent = \`
+                      @keyframes pulse {
+                        0% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.7); }
+                        70% { box-shadow: 0 0 0 10px rgba(0, 122, 255, 0); }
+                        100% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0); }
+                      }
+                    \`;
+                    document.head.appendChild(style);
+
+                    const userMarker = new mapboxgl.Marker(userMarkerEl)
+                      .setLngLat([userLoc.lng, userLoc.lat])
+                      .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML('<div style="font-weight: bold;">Your Location</div>'))
+                      .addTo(map);
+
+                    console.log('Added user location marker at:', userLoc);
+                  }
 
                   // Add bus stops
                   const busStops = ${JSON.stringify(busStopsForMap)};
@@ -173,7 +276,11 @@ export default function MapScreen() {
           domStorageEnabled={true}
         />
         <TouchableOpacity onPress={toggleMapFullScreen} style={styles.fullScreenButton}>
-          {isMapFullScreen ? <Ionicons name="contract" color={colors.primary} size={24}/> : <Ionicons name="expand" color={colors.primary} size={24}/>} 
+          {isMapFullScreen ? <Ionicons name="contract" color={colors.primary} size={24}/> : <Ionicons name="expand" color={colors.primary} size={24}/>}
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={centerOnUserLocation} style={styles.locationButton}>
+          <Ionicons name="locate" color={colors.primary} size={24}/>
         </TouchableOpacity>
       </View>
       
@@ -207,7 +314,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   mapContainer: {
-    height: 620, // Default height for the map
+    height: 600, // Default height for the map
     marginHorizontal: 8, // Add horizontal margin to match padding of other elements
     borderRadius: 12, // Rounded corners for the map container
     overflow: 'hidden', // Ensures the MapView respects the border radius
@@ -227,6 +334,20 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20, // Circular button
     zIndex: 11, // Ensure button is on top of the map
+  },
+  locationButton: {
+    position: 'absolute',
+    top: 60, // Below the fullscreen button
+    right: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    padding: 8,
+    borderRadius: 20,
+    zIndex: 11,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   sectionHeader: {
     flexDirection: 'row',
