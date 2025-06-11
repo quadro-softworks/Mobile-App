@@ -93,14 +93,32 @@ export const useBusStore = create<BusStore>((set, get) => ({
         console.warn('No authentication token found, using mock data');
         // Use mock data if no token - get all available mock stops
         const mockStops = await busApi.getBusStops({ ...params, ps: 1000 });
-        const transformedStops = mockStops.items.map((stop: any) => ({
-          ...stop,
-          coordinates: {
-            latitude: stop.location?.latitude || stop.coordinates?.latitude,
-            longitude: stop.location?.longitude || stop.coordinates?.longitude,
-          },
-          routes: stop.routes || [],
-        }));
+        const transformedStops = mockStops.items
+          .filter((stop: any) => {
+            // Filter out stops without valid location data
+            const hasLocation = stop.location &&
+              typeof stop.location.latitude === 'number' &&
+              typeof stop.location.longitude === 'number';
+
+            const hasCoordinates = stop.coordinates &&
+              typeof stop.coordinates.latitude === 'number' &&
+              typeof stop.coordinates.longitude === 'number';
+
+            if (!hasLocation && !hasCoordinates) {
+              console.warn('Filtering out mock bus stop without valid coordinates:', stop.name, stop);
+              return false;
+            }
+
+            return true;
+          })
+          .map((stop: any) => ({
+            ...stop,
+            coordinates: {
+              latitude: stop.location?.latitude || stop.coordinates?.latitude,
+              longitude: stop.location?.longitude || stop.coordinates?.longitude,
+            },
+            routes: stop.routes || [],
+          }));
 
         set({
           stops: append ? [...get().stops, ...transformedStops] : transformedStops,
@@ -139,7 +157,7 @@ export const useBusStore = create<BusStore>((set, get) => ({
         }
       );
 
-      console.log('API Response status:', response.status);
+      console.log('API Response status:', response.status, 'OK:', response.ok);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -151,15 +169,29 @@ export const useBusStore = create<BusStore>((set, get) => ({
       console.log('Fetched bus stops from API:', stops.length, 'stops');
 
       // Transform API response to include legacy fields for backward compatibility
-      const transformedStops = stops.map(stop => ({
-        ...stop,
-        // Add legacy fields for backward compatibility
-        coordinates: {
-          latitude: stop.location.latitude,
-          longitude: stop.location.longitude,
-        },
-        routes: [], // This would need to be fetched separately or included in the API
-      }));
+      const transformedStops = stops
+        .filter(stop => {
+          // Filter out stops without valid location data
+          const hasValidLocation = stop.location &&
+            typeof stop.location.latitude === 'number' &&
+            typeof stop.location.longitude === 'number';
+
+          if (!hasValidLocation) {
+            console.warn('Filtering out bus stop without valid location:', stop.name, stop);
+            return false;
+          }
+
+          return true;
+        })
+        .map(stop => ({
+          ...stop,
+          // Add legacy fields for backward compatibility
+          coordinates: {
+            latitude: stop.location.latitude,
+            longitude: stop.location.longitude,
+          },
+          routes: [], // This would need to be fetched separately or included in the API
+        }));
 
       const currentStops = get().stops;
 
@@ -179,14 +211,32 @@ export const useBusStore = create<BusStore>((set, get) => ({
       // Fallback to mock data - get all available mock stops
       try {
         const mockStops = await busApi.getBusStops({ ...params, ps: 1000 });
-        const transformedStops = mockStops.items.map((stop: any) => ({
-          ...stop,
-          coordinates: {
-            latitude: stop.location?.latitude || stop.coordinates?.latitude,
-            longitude: stop.location?.longitude || stop.coordinates?.longitude,
-          },
-          routes: stop.routes || [],
-        }));
+        const transformedStops = mockStops.items
+          .filter((stop: any) => {
+            // Filter out stops without valid location data
+            const hasLocation = stop.location &&
+              typeof stop.location.latitude === 'number' &&
+              typeof stop.location.longitude === 'number';
+
+            const hasCoordinates = stop.coordinates &&
+              typeof stop.coordinates.latitude === 'number' &&
+              typeof stop.coordinates.longitude === 'number';
+
+            if (!hasLocation && !hasCoordinates) {
+              console.warn('Filtering out fallback mock bus stop without valid coordinates:', stop.name, stop);
+              return false;
+            }
+
+            return true;
+          })
+          .map((stop: any) => ({
+            ...stop,
+            coordinates: {
+              latitude: stop.location?.latitude || stop.coordinates?.latitude,
+              longitude: stop.location?.longitude || stop.coordinates?.longitude,
+            },
+            routes: stop.routes || [],
+          }));
 
         set({
           stops: append ? [...get().stops, ...transformedStops] : transformedStops,

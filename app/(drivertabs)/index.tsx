@@ -32,21 +32,44 @@ export default function DriverMapScreen() {
     fetchBusStops({ ps: 1000 });
   }, [fetchBusStops]);
 
-  // Transform API bus stops for map display
-  const busStopsForMap = stops.map(stop => ({
-    id: stop.id,
-    name: stop.name,
-    coordinates: {
-      lng: stop.location.longitude,
-      lat: stop.location.latitude
-    },
-    properties: {
-      capacity: stop.capacity,
-      is_active: stop.is_active,
-      created_at: stop.created_at,
-      updated_at: stop.updated_at
-    }
-  }));
+  // Transform API bus stops for map display with null checks
+  const busStopsForMap = stops
+    .filter(stop => {
+      // Filter out stops without valid location data
+      const hasLocation = stop.location &&
+        typeof stop.location.longitude === 'number' &&
+        typeof stop.location.latitude === 'number';
+
+      const hasCoordinates = stop.coordinates &&
+        typeof stop.coordinates.longitude === 'number' &&
+        typeof stop.coordinates.latitude === 'number';
+
+      if (!hasLocation && !hasCoordinates) {
+        console.warn('Skipping bus stop without valid coordinates:', stop.name, stop);
+        return false;
+      }
+
+      return true;
+    })
+    .map(stop => {
+      // Use location first, fallback to coordinates
+      const location = stop.location || stop.coordinates;
+
+      return {
+        id: stop.id,
+        name: stop.name,
+        coordinates: {
+          lng: location.longitude,
+          lat: location.latitude
+        },
+        properties: {
+          capacity: stop.capacity,
+          is_active: stop.is_active,
+          created_at: stop.created_at,
+          updated_at: stop.updated_at
+        }
+      };
+    });
   
 
   const [webViewRef, setWebViewRef] = useState<any>(null);
