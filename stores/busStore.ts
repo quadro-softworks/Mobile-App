@@ -89,7 +89,23 @@ export const useBusStore = create<BusStore>((set, get) => ({
       // Get the auth token from the auth store
       const authState = useAuthStore.getState();
       if (!authState.token) {
-        throw new Error('No authentication token found');
+        console.warn('No authentication token found, using mock data');
+        // Use mock data if no token
+        const mockStops = await busApi.getBusStops(params);
+        const transformedStops = mockStops.items.map((stop: any) => ({
+          ...stop,
+          coordinates: {
+            latitude: stop.location?.latitude || stop.coordinates?.latitude,
+            longitude: stop.location?.longitude || stop.coordinates?.longitude,
+          },
+          routes: stop.routes || [],
+        }));
+
+        set({
+          stops: append ? [...get().stops, ...transformedStops] : transformedStops,
+          isLoading: false
+        });
+        return;
       }
 
       const searchParams = { ...get().searchParams, ...params };
@@ -100,6 +116,8 @@ export const useBusStore = create<BusStore>((set, get) => ({
       if (searchParams.filterBy) queryParams.append('filter_by', searchParams.filterBy);
       if (searchParams.pn) queryParams.append('pn', searchParams.pn.toString());
       if (searchParams.ps) queryParams.append('ps', searchParams.ps.toString());
+
+      console.log('Fetching bus stops from API with params:', queryParams.toString());
 
       const response = await fetch(
         `https://guzosync-fastapi.onrender.com/api/buses/stops?${queryParams.toString()}`,
@@ -112,13 +130,16 @@ export const useBusStore = create<BusStore>((set, get) => ({
         }
       );
 
+      console.log('API Response status:', response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('API Error:', errorData);
         throw new Error(errorData.detail || 'Failed to fetch bus stops');
       }
 
       const stops: BusStop[] = await response.json();
-      console.log('Fetched bus stops:', stops);
+      console.log('Fetched bus stops from API:', stops.length, 'stops');
 
       // Transform API response to include legacy fields for backward compatibility
       const transformedStops = stops.map(stop => ({
@@ -144,7 +165,29 @@ export const useBusStore = create<BusStore>((set, get) => ({
       });
     } catch (error) {
       console.error('Fetch bus stops error:', error);
-      set({ error: (error as Error).message, isLoading: false });
+      console.log('Falling back to mock data');
+
+      // Fallback to mock data
+      try {
+        const mockStops = await busApi.getBusStops(params);
+        const transformedStops = mockStops.items.map((stop: any) => ({
+          ...stop,
+          coordinates: {
+            latitude: stop.location?.latitude || stop.coordinates?.latitude,
+            longitude: stop.location?.longitude || stop.coordinates?.longitude,
+          },
+          routes: stop.routes || [],
+        }));
+
+        set({
+          stops: append ? [...get().stops, ...transformedStops] : transformedStops,
+          error: 'Using offline data - API unavailable',
+          isLoading: false
+        });
+      } catch (mockError) {
+        console.error('Mock data also failed:', mockError);
+        set({ error: (error as Error).message, isLoading: false });
+      }
     }
   },
   

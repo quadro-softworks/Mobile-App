@@ -1,51 +1,46 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Text, FlatList, TouchableOpacity, Platform, SafeAreaView } from 'react-native';
+import { View, StyleSheet, Text, Platform, SafeAreaView, TouchableOpacity } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useRouter } from 'expo-router';
 import { useBusStore } from '@/stores/busStore';
-import { BusCard } from '@/components/BusCard';
 import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
-import { Card } from '@/components/ui/Card';
 import { Bus } from '@/types';
-import { busStopsGeoJSON } from '@/utils/busStopsData';
+
 
 export default function MapScreen() {
   const router = useRouter();
-  const { buses, fetchBuses, isLoading } = useBusStore();
+  const { buses, fetchBuses, stops, fetchBusStops } = useBusStore();
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredBuses, setFilteredBuses] = useState<Bus[]>([]);
   const [isMapFullScreen, setMapFullScreen] = useState(false);
 
-  // Process bus stops from GeoJSON data
-  const getBusStops = () => {
-    if (!busStopsGeoJSON || !busStopsGeoJSON.features) return [];
+  // Transform API bus stops for map display
+  const busStopsForMap = stops.map(stop => ({
+    id: stop.id,
+    name: stop.name,
+    coordinates: {
+      lng: stop.location.longitude,
+      lat: stop.location.latitude
+    },
+    properties: {
+      capacity: stop.capacity,
+      is_active: stop.is_active,
+      created_at: stop.created_at,
+      updated_at: stop.updated_at
+    }
+  }));
 
-    return busStopsGeoJSON.features
-      .filter((feature: any) =>
-        feature.geometry &&
-        feature.geometry.type === 'Point' &&
-        feature.geometry.coordinates &&
-        feature.geometry.coordinates.length >= 2
-      )
-      .map((feature: any) => ({
-        id: feature.id || feature.properties?.['@id'] || Math.random().toString(),
-        name: feature.properties?.name || 'Bus Stop',
-        coordinates: {
-          lng: feature.geometry.coordinates[0],
-          lat: feature.geometry.coordinates[1]
-        },
-        properties: feature.properties
-      }));
-  };
-
-  const busStops = getBusStops();
+  // Debug logging
+  console.log('Bus stops count:', stops.length);
+  console.log('Bus stops for map:', busStopsForMap.length);
   
   useEffect(() => {
     fetchBuses();
-  }, [fetchBuses]);
+    fetchBusStops();
+  }, [fetchBuses, fetchBusStops]);
   
   useEffect(() => {
     if (searchQuery.trim() === '') {
@@ -77,6 +72,9 @@ export default function MapScreen() {
           <View style={styles.header}>
             <Text style={styles.title}>{t('map.title')}</Text>
             <Text style={styles.subtitle}>{t('map.trackBuses')}</Text>
+            <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
+              Bus stops loaded: {stops.length} | Map stops: {busStopsForMap.length}
+            </Text>
           </View>
         </View>
       )}
@@ -121,9 +119,12 @@ export default function MapScreen() {
                   });
 
                   // Add bus stops
-                  const busStops = ${JSON.stringify(busStops)};
+                  const busStops = ${JSON.stringify(busStopsForMap)};
+                  console.log('Bus stops data:', busStops);
+                  console.log('Number of bus stops:', busStops.length);
 
-                  busStops.forEach(stop => {
+                  busStops.forEach((stop, index) => {
+                    console.log('Processing stop', index + 1, ':', stop.name, 'at coordinates:', stop.coordinates);
                     // Create a simple orange dot marker
                     const el = document.createElement('div');
                     el.className = 'bus-stop-marker';
@@ -139,9 +140,9 @@ export default function MapScreen() {
                     const popupContent = \`
                       <div class="popup-title">\${stop.name}</div>
                       <div class="popup-info">
-                        \${stop.properties?.operator ? 'Operator: ' + stop.properties.operator + '<br>' : ''}
-                        \${stop.properties?.['ref:AB'] ? 'Routes: ' + stop.properties['ref:AB'] + '<br>' : ''}
-                        \${stop.properties?.network ? 'Network: ' + stop.properties.network : ''}
+                        \${stop.properties?.capacity ? 'Capacity: ' + stop.properties.capacity + '<br>' : ''}
+                        \${stop.properties?.is_active ? 'Status: Active<br>' : 'Status: Inactive<br>'}
+                        \${stop.properties?.created_at ? 'Created: ' + new Date(stop.properties.created_at).toLocaleDateString() : ''}
                       </div>
                     \`;
 
@@ -153,11 +154,15 @@ export default function MapScreen() {
                     }).setHTML(popupContent);
 
                     // Add marker to map
-                    new mapboxgl.Marker(el)
+                    const marker = new mapboxgl.Marker(el)
                       .setLngLat([stop.coordinates.lng, stop.coordinates.lat])
                       .setPopup(popup)
                       .addTo(map);
+
+                    console.log('Added marker for stop:', stop.name, 'at:', stop.coordinates);
                   });
+
+                  console.log('Finished adding all', busStops.length, 'bus stops to map');
                 </script>
               </body>
               </html>`
@@ -172,31 +177,6 @@ export default function MapScreen() {
         </TouchableOpacity>
       </View>
       
-      {/* Bus List - Only shown when map is not fullscreen */}
-      {!isMapFullScreen && (
-        <View style={styles.listContainerPadded}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('map.findNearbyStops')}</Text>
-            <TouchableOpacity onPress={() => router.push('/all-buses')}>
-              <Text style={styles.viewAllText}>View All</Text>
-            </TouchableOpacity>
-          </View>
-          {isLoading ? (
-            <Text style={styles.loadingText}>{t('common.loading')}</Text>
-          ) : filteredBuses.length > 0 ? (
-            <FlatList
-              data={filteredBuses.slice(0, 3)} // Show only first 3 buses
-              renderItem={({ item }) => (
-                <BusCard bus={item} onPress={() => handleBusPress(item)} />
-              )}
-              keyExtractor={(item) => item.id.toString()}
-              showsVerticalScrollIndicator={false}
-            />
-          ) : (
-            <Text style={styles.noBusesText}>No buses found matching your search.</Text>
-          )}
-        </View>
-      )}
     </SafeAreaView>
   );
 }
@@ -227,8 +207,8 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   mapContainer: {
-    height: 250, // Default height for the map
-    marginHorizontal: 16, // Add horizontal margin to match padding of other elements
+    height: 620, // Default height for the map
+    marginHorizontal: 8, // Add horizontal margin to match padding of other elements
     borderRadius: 12, // Rounded corners for the map container
     overflow: 'hidden', // Ensures the MapView respects the border radius
     marginBottom: 16, // Space below the map before the list starts

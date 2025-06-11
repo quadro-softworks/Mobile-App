@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
-import { busStopsGeoJSON } from '@/utils/busStopsData';
+import { useBusStore } from '@/stores/busStore';
 
 interface BusArrival {
   id: string;
@@ -41,6 +41,7 @@ interface BusStop {
 
 export default function ArrivalsScreen() {
   const { user } = useAuthStore();
+  const { stops, fetchBusStops, isLoading } = useBusStore();
   const { t } = useTranslation();
   const [arrivals, setArrivals] = useState<BusArrival[]>([]);
   const [assignedStop, setAssignedStop] = useState<BusStop>({
@@ -56,29 +57,26 @@ export default function ArrivalsScreen() {
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [isMapFullScreen, setMapFullScreen] = useState(false);
 
-  // Process bus stops from GeoJSON data
-  const getBusStops = () => {
-    if (!busStopsGeoJSON || !busStopsGeoJSON.features) return [];
+  // Fetch bus stops from API on component mount
+  useEffect(() => {
+    fetchBusStops();
+  }, [fetchBusStops]);
 
-    return busStopsGeoJSON.features
-      .filter((feature: any) =>
-        feature.geometry &&
-        feature.geometry.type === 'Point' &&
-        feature.geometry.coordinates &&
-        feature.geometry.coordinates.length >= 2
-      )
-      .map((feature: any) => ({
-        id: feature.id || feature.properties?.['@id'] || Math.random().toString(),
-        name: feature.properties?.name || 'Bus Stop',
-        coordinates: {
-          lng: feature.geometry.coordinates[0],
-          lat: feature.geometry.coordinates[1]
-        },
-        properties: feature.properties
-      }));
-  };
-
-  const busStops = getBusStops();
+  // Transform API bus stops for map display
+  const busStopsForMap = stops.map(stop => ({
+    id: stop.id,
+    name: stop.name,
+    coordinates: {
+      lng: stop.location.longitude,
+      lat: stop.location.latitude
+    },
+    properties: {
+      capacity: stop.capacity,
+      is_active: stop.is_active,
+      created_at: stop.created_at,
+      updated_at: stop.updated_at
+    }
+  }));
 
   // Assigned stop coordinates (Stadium Bus Stop)
   const assignedStopCoords = { lat: 9.0120276, lng: 38.7570321 };
@@ -354,9 +352,12 @@ export default function ArrivalsScreen() {
                     .addTo(map);
 
                   // Add other bus stops
-                  const busStops = ${JSON.stringify(busStops)};
+                  const busStops = ${JSON.stringify(busStopsForMap)};
+                  console.log('Regulator dashboard - Bus stops data:', busStops);
+                  console.log('Regulator dashboard - Number of bus stops:', busStops.length);
 
-                  busStops.forEach(stop => {
+                  busStops.forEach((stop, index) => {
+                    console.log('Regulator dashboard - Processing stop', index + 1, ':', stop.name, 'at coordinates:', stop.coordinates);
                     // Skip if this is the assigned stop
                     if (stop.name === '${assignedStop.name}') return;
 

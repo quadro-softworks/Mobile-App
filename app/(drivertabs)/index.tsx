@@ -14,40 +14,38 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
-import { busStopsGeoJSON } from '@/utils/busStopsData';
+import { useBusStore } from '@/stores/busStore';
 import Constants from 'expo-constants';
 
 export default function DriverMapScreen() {
   const {} = useAuthStore();
+  const { stops, fetchBusStops, isLoading } = useBusStore();
   const { t } = useTranslation();
   const [isOnDuty, setIsOnDuty] = useState(false);
   const [currentLocation, setCurrentLocation] = useState({ lat: 9.0301, lng: 38.7578 });
   const [locationSubscription, setLocationSubscription] = useState<any>(null);
   const [isMapFullScreen, setMapFullScreen] = useState(false);
 
-  // Process bus stops from GeoJSON data
-  const getBusStops = () => {
-    if (!busStopsGeoJSON || !busStopsGeoJSON.features) return [];
+  // Fetch bus stops from API on component mount
+  useEffect(() => {
+    fetchBusStops();
+  }, [fetchBusStops]);
 
-    return busStopsGeoJSON.features
-      .filter((feature: any) =>
-        feature.geometry &&
-        feature.geometry.type === 'Point' &&
-        feature.geometry.coordinates &&
-        feature.geometry.coordinates.length >= 2
-      )
-      .map((feature: any) => ({
-        id: feature.id || feature.properties?.['@id'] || Math.random().toString(),
-        name: feature.properties?.name || 'Bus Stop',
-        coordinates: {
-          lng: feature.geometry.coordinates[0],
-          lat: feature.geometry.coordinates[1]
-        },
-        properties: feature.properties
-      }));
-  };
-
-  const busStops = getBusStops();
+  // Transform API bus stops for map display
+  const busStopsForMap = stops.map(stop => ({
+    id: stop.id,
+    name: stop.name,
+    coordinates: {
+      lng: stop.location.longitude,
+      lat: stop.location.latitude
+    },
+    properties: {
+      capacity: stop.capacity,
+      is_active: stop.is_active,
+      created_at: stop.created_at,
+      updated_at: stop.updated_at
+    }
+  }));
   
 
   const [webViewRef, setWebViewRef] = useState<any>(null);
@@ -148,6 +146,9 @@ export default function DriverMapScreen() {
         <View>
           <Text style={styles.title}>{t('driver.title')}</Text>
           <Text style={styles.subtitle}>{t('driver.subtitle')}</Text>
+          <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
+            Bus stops loaded: {stops.length} | Map stops: {busStopsForMap.length}
+          </Text>
         </View>
         <View style={styles.dutyToggle}>
           <Text style={[styles.dutyText, { color: isOnDuty ? colors.success : colors.textSecondary }]}>
@@ -221,9 +222,12 @@ export default function DriverMapScreen() {
                     .addTo(map);
 
                   // Add bus stops
-                  const busStops = ${JSON.stringify(busStops)};
+                  const busStops = ${JSON.stringify(busStopsForMap)};
+                  console.log('Driver dashboard - Bus stops data:', busStops);
+                  console.log('Driver dashboard - Number of bus stops:', busStops.length);
 
-                  busStops.forEach(stop => {
+                  busStops.forEach((stop, index) => {
+                    console.log('Driver dashboard - Processing stop', index + 1, ':', stop.name, 'at coordinates:', stop.coordinates);
                     // Create a simple orange dot marker
                     const el = document.createElement('div');
                     el.className = 'bus-stop-marker';
@@ -239,9 +243,9 @@ export default function DriverMapScreen() {
                     const popupContent = \`
                       <div class="popup-title">\${stop.name}</div>
                       <div class="popup-info">
-                        \${stop.properties?.operator ? 'Operator: ' + stop.properties.operator + '<br>' : ''}
-                        \${stop.properties?.['ref:AB'] ? 'Routes: ' + stop.properties['ref:AB'] + '<br>' : ''}
-                        \${stop.properties?.network ? 'Network: ' + stop.properties.network : ''}
+                        \${stop.properties?.capacity ? 'Capacity: ' + stop.properties.capacity + '<br>' : ''}
+                        \${stop.properties?.is_active ? 'Status: Active<br>' : 'Status: Inactive<br>'}
+                        \${stop.properties?.created_at ? 'Created: ' + new Date(stop.properties.created_at).toLocaleDateString() : ''}
                       </div>
                     \`;
 
@@ -253,11 +257,15 @@ export default function DriverMapScreen() {
                     }).setHTML(popupContent);
 
                     // Add marker to map
-                    new mapboxgl.Marker(el)
+                    const marker = new mapboxgl.Marker(el)
                       .setLngLat([stop.coordinates.lng, stop.coordinates.lat])
                       .setPopup(popup)
                       .addTo(map);
+
+                    console.log('Driver dashboard - Added marker for stop:', stop.name, 'at:', stop.coordinates);
                   });
+
+                  console.log('Driver dashboard - Finished adding all', busStops.length, 'bus stops to map');
 
                   // Handle messages from React Native
                   window.addEventListener('message', function(event) {
