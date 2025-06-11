@@ -1,8 +1,8 @@
-import React from 'react';
-import { 
-  TouchableOpacity, 
-  Text, 
-  StyleSheet, 
+import React, { useRef } from 'react';
+import {
+  TouchableOpacity,
+  Text,
+  StyleSheet,
   ActivityIndicator,
   ViewStyle,
   TextStyle,
@@ -39,6 +39,25 @@ export const Button: React.FC<ButtonProps> = ({
   icon,
   iconPosition = 'left',
 }) => {
+  const lastPressTime = useRef(0);
+
+  const handlePress = () => {
+    // Check if button should be disabled
+    if (disabled || loading) {
+      console.log('⚠️ Button press blocked - disabled:', disabled, 'loading:', loading);
+      return;
+    }
+
+    const now = Date.now();
+    // Prevent double-clicks within 300ms (reduced from 500ms)
+    if (now - lastPressTime.current < 300) {
+      console.log('⚠️ Button double-click prevented (within 300ms)');
+      return;
+    }
+    lastPressTime.current = now;
+    console.log('🔘 Button press allowed, calling onPress');
+    onPress();
+  };
   const getButtonStyle = () => {
     const baseStyle: ViewStyle = {
       ...styles.button,
@@ -107,7 +126,7 @@ export const Button: React.FC<ButtonProps> = ({
   return (
     <TouchableOpacity
       style={[getButtonStyle(), style]}
-      onPress={onPress}
+      onPress={handlePress}
       disabled={disabled || loading}
       activeOpacity={0.7}
     >

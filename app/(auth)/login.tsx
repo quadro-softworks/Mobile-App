@@ -12,6 +12,25 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+
+  // Test functions for quick testing
+  const fillTestRegulator = () => {
+    console.log('🧪 Filling test regulator credentials');
+    setEmail('regulator@test.com');
+    setPassword('password123');
+  };
+
+  const fillTestDriver = () => {
+    console.log('🧪 Filling test driver credentials');
+    setEmail('driver@test.com');
+    setPassword('password123');
+  };
+
+  const fillTestPassenger = () => {
+    console.log('🧪 Filling test passenger credentials');
+    setEmail('passenger@test.com');
+    setPassword('password123');
+  };
   
   const { login, isLoading, error, clearError } = useAuthStore();
   
@@ -22,37 +41,57 @@ export default function LoginScreen() {
   
   const validateForm = () => {
     let isValid = true;
-    
+    console.log('🔍 Validating form...', { email, password: password ? '***' : 'empty' });
+
     // Validate email
     if (!email) {
+      console.log('❌ Email validation failed: empty');
       setEmailError('Email is required');
       isValid = false;
     } else if (!/\S+@\S+\.\S+/.test(email)) {
+      console.log('❌ Email validation failed: invalid format');
       setEmailError('Email is invalid');
       isValid = false;
     } else {
+      console.log('✅ Email validation passed');
       setEmailError('');
     }
-    
+
     // Validate password
     if (!password) {
+      console.log('❌ Password validation failed: empty');
       setPasswordError('Password is required');
       isValid = false;
     } else if (password.length < 6) {
+      console.log('❌ Password validation failed: too short');
       setPasswordError('Password must be at least 6 characters');
       isValid = false;
     } else {
+      console.log('✅ Password validation passed');
       setPasswordError('');
     }
-    
+
+    console.log('📝 Overall validation result:', isValid);
     return isValid;
   };
   
   const handleLogin = async () => {
+    console.log('🔄 Login button clicked', { email: email.length > 0 ? 'Present' : 'Empty', password: password.length > 0 ? 'Present' : 'Empty' });
     clearError();
-    
-    if (validateForm()) {
-      await login({ email, password });
+
+    const isValid = validateForm();
+    console.log('📝 Form validation result:', isValid);
+
+    if (isValid) {
+      console.log('✅ Form valid, calling login API...');
+      try {
+        await login({ email, password });
+        console.log('✅ Login API call completed');
+      } catch (error) {
+        console.error('❌ Login API call failed:', error);
+      }
+    } else {
+      console.log('❌ Form validation failed');
     }
   };
   
@@ -127,6 +166,19 @@ export default function LoginScreen() {
                 <Text style={styles.registerLink}>Sign Up</Text>
               </TouchableOpacity>
             </Link>
+          </View>
+
+          {/* Test buttons for debugging */}
+          <View style={styles.testButtons}>
+            <TouchableOpacity onPress={fillTestRegulator} style={styles.testButton}>
+              <Text style={styles.testButtonText}>Test Regulator</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={fillTestDriver} style={styles.testButton}>
+              <Text style={styles.testButtonText}>Test Driver</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={fillTestPassenger} style={styles.testButton}>
+              <Text style={styles.testButtonText}>Test Passenger</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -236,5 +288,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.primary,
     fontWeight: '600',
+  },
+  testButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 20,
+    paddingHorizontal: 10,
+  },
+  testButton: {
+    backgroundColor: colors.secondary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  testButtonText: {
+    color: colors.card,
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

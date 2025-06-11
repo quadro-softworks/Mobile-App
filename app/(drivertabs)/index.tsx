@@ -18,9 +18,12 @@ import { useBusStore } from '@/stores/busStore';
 import Constants from 'expo-constants';
 
 export default function DriverMapScreen() {
-  const {} = useAuthStore();
+  const { user } = useAuthStore();
   const { stops, fetchBusStops, isLoading } = useBusStore();
   const { t } = useTranslation();
+
+  console.log('🚌 DriverMapScreen loaded - User:', user ? { role: user.role, email: user.email } : 'No user');
+  console.log('🚌 DriverMapScreen - Bus stops count:', stops.length);
   const [isOnDuty, setIsOnDuty] = useState(false);
   const [currentLocation, setCurrentLocation] = useState({ lat: 9.0301, lng: 38.7578 });
   const [locationSubscription, setLocationSubscription] = useState<any>(null);

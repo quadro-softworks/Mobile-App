@@ -47,19 +47,29 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       login: async (credentials) => {
+        console.log('🔐 Auth store login called with:', { email: credentials.email, password: credentials.password ? '***' : 'empty' });
         set({ isLoading: true, error: null });
+        console.log('🔄 Set loading state to true');
+
         try {
+          console.log('📡 Making API call to login endpoint...');
           const res = await fetch('https://guzosync-fastapi.onrender.com/api/accounts/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(credentials),
           });
+
+          console.log('📡 API response received:', { status: res.status, ok: res.ok });
           if (!res.ok) {
+            console.log('❌ API call failed with status:', res.status);
             const data = await res.json();
+            console.log('❌ Error data:', data);
             throw new Error(data.detail || 'Login failed');
           }
+
+          console.log('✅ API call successful, parsing response...');
           const data = await res.json();
-          console.log('Login response:', data);
+          console.log('📦 Login response data:', data);
 
           // Handle the actual API response structure
           const token = data.access_token || data.token;

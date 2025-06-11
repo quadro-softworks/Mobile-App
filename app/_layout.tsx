@@ -51,6 +51,7 @@ function RootLayoutNav() {
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
   const router = useRouter();
   const hasNavigated = useRef(false);
+  const navigationTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Handle authentication and role-based navigation
   useEffect(() => {
@@ -65,34 +66,58 @@ function RootLayoutNav() {
     // Wait for both loading to finish AND store to be hydrated
     // Also prevent multiple navigation calls
     if (!isLoading && hasHydrated && !hasNavigated.current) {
-      hasNavigated.current = true;
-
-      if (!user || !token) {
-        // No user or token, redirect to login
-        console.log('Redirecting to login - no user or token');
-        router.replace('/(auth)/login');
-      } else {
-        // User is authenticated, redirect based on role
-        console.log('User authenticated, role:', user.role);
-        if (user.role === 'BUS_DRIVER' || user.role === 'DRIVE') {
-          console.log('Redirecting to driver tabs');
-          router.replace('/(drivertabs)');
-        } else if (user.role === 'QUEUE_REGULATOR') {
-          console.log('Redirecting to regulator tabs');
-          router.replace('/(regulatortabs)');
-        } else {
-          // PASSENGER and others go to main tabs
-          console.log('Redirecting to main tabs');
-          router.replace('/(tabs)');
-        }
+      // Clear any existing navigation timeout
+      if (navigationTimeout.current) {
+        clearTimeout(navigationTimeout.current);
       }
+
+      // Debounce navigation to prevent double-clicks
+      navigationTimeout.current = setTimeout(() => {
+        if (hasNavigated.current) {
+          console.log('⚠️ Navigation already completed, skipping');
+          return;
+        }
+
+        hasNavigated.current = true;
+        console.log('🚀 Executing navigation...');
+
+        if (!user || !token) {
+          // No user or token, redirect to login
+          console.log('Redirecting to login - no user or token');
+          router.replace('/(auth)/login');
+        } else {
+          // User is authenticated, redirect based on role
+          console.log('User authenticated, role:', user.role);
+          if (user.role === 'BUS_DRIVER' || user.role === 'DRIVE') {
+            console.log('Redirecting to driver tabs');
+            router.replace('/(drivertabs)');
+          } else if (user.role === 'QUEUE_REGULATOR') {
+            console.log('Redirecting to regulator tabs');
+            router.replace('/(regulatortabs)');
+          } else {
+            // PASSENGER and others go to main tabs
+            console.log('Redirecting to main tabs');
+            router.replace('/(tabs)');
+          }
+        }
+      }, 100); // 100ms debounce
     }
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (navigationTimeout.current) {
+        clearTimeout(navigationTimeout.current);
+      }
+    };
   }, [user, token, isLoading, hasHydrated, router]);
 
-  // Reset navigation flag when user/token changes (for login/logout)
+  // Reset navigation flag only when user logs out (token becomes null)
   useEffect(() => {
-    hasNavigated.current = false;
-  }, [user, token]);
+    if (!token) {
+      console.log('🔄 Token cleared - resetting navigation flag for logout');
+      hasNavigated.current = false;
+    }
+  }, [token]);
 
   return (
     <>

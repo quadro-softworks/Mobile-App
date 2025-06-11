@@ -206,7 +206,20 @@ export const useBusStore = create<BusStore>((set, get) => ({
       });
     } catch (error) {
       console.error('Fetch bus stops error:', error);
-      console.log('Falling back to mock data');
+
+      // Provide more specific error messages
+      let errorMessage = 'Failed to fetch bus stops';
+      if (error instanceof Error) {
+        if (error.message.includes('Network request failed')) {
+          errorMessage = 'Network connection failed - using offline data';
+        } else if (error.message.includes('Failed to fetch')) {
+          errorMessage = 'Server unavailable - using offline data';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
+      console.log('Falling back to mock data due to:', errorMessage);
 
       // Fallback to mock data - get all available mock stops
       try {
@@ -240,13 +253,13 @@ export const useBusStore = create<BusStore>((set, get) => ({
 
         set({
           stops: append ? [...get().stops, ...transformedStops] : transformedStops,
-          error: 'Using offline data - API unavailable',
+          error: errorMessage,
           isLoading: false
         });
-        console.log('Loaded', transformedStops.length, 'fallback mock bus stops');
+        console.log('✅ Loaded', transformedStops.length, 'fallback mock bus stops');
       } catch (mockError) {
         console.error('Mock data also failed:', mockError);
-        set({ error: (error as Error).message, isLoading: false });
+        set({ error: errorMessage, isLoading: false });
       }
     }
   },
@@ -285,10 +298,18 @@ export const useBusStore = create<BusStore>((set, get) => ({
           }
         );
 
+        console.log(`Page ${currentPage} response status:`, response.status, 'OK:', response.ok);
+
         if (!response.ok) {
-          const errorData = await response.json();
+          let errorData;
+          try {
+            errorData = await response.json();
+          } catch (parseError) {
+            console.error('Failed to parse error response on page', currentPage);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
           console.error('API Error on page', currentPage, ':', errorData);
-          throw new Error(errorData.detail || 'Failed to fetch bus stops');
+          throw new Error(errorData.detail || `Failed to fetch bus stops (HTTP ${response.status})`);
         }
 
         const pageStops: BusStop[] = await response.json();
