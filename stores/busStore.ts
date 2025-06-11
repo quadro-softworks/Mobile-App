@@ -18,7 +18,7 @@ interface BusStore {
   fetchBusById: (busId: string) => Promise<void>;
   fetchRoutes: () => Promise<void>;
   fetchRouteById: (routeId: string) => Promise<void>;
-  fetchBusStops: (params?: SearchParams) => Promise<void>;
+  fetchBusStops: (params?: SearchParams, append?: boolean) => Promise<void>;
   fetchBusStopById: (stopId: string) => Promise<void>;
   setSearchParams: (params: Partial<SearchParams>) => void;
   clearSelectedBus: () => void;
@@ -83,8 +83,8 @@ export const useBusStore = create<BusStore>((set, get) => ({
     }
   },
   
-  fetchBusStops: async (params = {}) => {
-    set({ isLoading: true, error: null });
+  fetchBusStops: async (params = {}, append = false) => {
+    set({ isLoading: !append, error: null });
     try {
       // Get the auth token from the auth store
       const authState = useAuthStore.getState();
@@ -131,8 +131,10 @@ export const useBusStore = create<BusStore>((set, get) => ({
         routes: [], // This would need to be fetched separately or included in the API
       }));
 
+      const currentStops = get().stops;
+
       set({
-        stops: transformedStops,
+        stops: append ? [...currentStops, ...transformedStops] : transformedStops,
         searchParams: {
           ...searchParams,
           pn: searchParams.pn || 1,

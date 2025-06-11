@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Text, FlatList, Platform, SafeAreaView, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, FlatList, Platform, SafeAreaView, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useBusStore } from '@/stores/busStore';
 import { StopCard } from '@/components/StopCard';
@@ -41,17 +41,17 @@ export default function StopsScreen() {
     }
   };
 
-  const handleEndReached = async () => {
+  const handleLoadMore = async () => {
     if (loadingMore || isLoading) return;
 
     setLoadingMore(true);
     try {
       const nextPage = (searchParams?.pn || 1) + 1;
+      // Use append=true to add new data to existing stops
       await fetchBusStops({
         pn: nextPage,
         search: searchQuery || undefined,
-        // Note: This would need to be modified to append results rather than replace
-      });
+      }, true);
     } finally {
       setLoadingMore(false);
     }
@@ -122,8 +122,6 @@ export default function StopsScreen() {
           )}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          onEndReached={handleEndReached}
-          onEndReachedThreshold={0.5}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -144,11 +142,32 @@ export default function StopsScreen() {
             </View>
           }
           ListFooterComponent={
-            loadingMore ? (
-              <View style={styles.loadingMore}>
-                <Text style={styles.loadingMoreText}>Loading more stops...</Text>
-              </View>
-            ) : null
+            <View>
+              {/* Load More Button */}
+              {stops.length > 0 && !isLoading && (
+                <View style={styles.loadMoreContainer}>
+                  <TouchableOpacity
+                    style={[styles.loadMoreButton, loadingMore && styles.loadMoreButtonDisabled]}
+                    onPress={handleLoadMore}
+                    disabled={loadingMore}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.loadMoreContent}>
+                      <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+                      <Text style={styles.loadMoreText}>Load More Stops</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Loading More Indicator */}
+              {loadingMore && (
+                <View style={styles.loadingMoreContainer}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={styles.loadingMoreText}>Loading more stops...</Text>
+                </View>
+              )}
+            </View>
           }
         />
       </View>
@@ -225,8 +244,41 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: 'center',
   },
+  loadMoreContainer: {
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  loadMoreButton: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minWidth: 160,
+    alignItems: 'center',
+  },
+  loadMoreButtonDisabled: {
+    opacity: 0.6,
+  },
+  loadMoreContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  loadMoreText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  loadingMoreContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
   loadingMoreText: {
     fontSize: 14,
     color: colors.textSecondary,
+    marginTop: 8,
   },
 });
