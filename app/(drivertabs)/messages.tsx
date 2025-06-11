@@ -11,6 +11,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -26,6 +27,7 @@ interface Message {
 
 export default function MessagesScreen() {
   const { user } = useAuthStore();
+  const { t } = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [, setIsLoading] = useState(false);
@@ -168,7 +170,7 @@ export default function MessagesScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Messages</Text>
+        <Text style={styles.title}>{t('driver.messages')}</Text>
         <Text style={styles.subtitle}>Communication Center</Text>
       </View>
 
@@ -184,7 +186,7 @@ export default function MessagesScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="chatbubbles-outline" size={64} color={colors.textSecondary} />
-            <Text style={styles.emptyText}>No messages yet</Text>
+            <Text style={styles.emptyText}>{t('driver.noMessages')}</Text>
             <Text style={styles.emptySubtext}>Messages from dispatch and passengers will appear here</Text>
           </View>
         }
@@ -193,7 +195,7 @@ export default function MessagesScreen() {
       <View style={styles.messageInput}>
         <TextInput
           style={styles.textInput}
-          placeholder="Type a message to dispatch..."
+          placeholder={t('driver.typeMessage')}
           value={newMessage}
           onChangeText={setNewMessage}
           multiline

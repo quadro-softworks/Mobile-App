@@ -5,12 +5,14 @@ import { useBusStore } from '@/stores/busStore';
 import { StopCard } from '@/components/StopCard';
 import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
 import { Input } from '@/components/ui/Input';
 import { BusStop } from '@/types';
 
 export default function StopsScreen() {
   const router = useRouter();
   const { stops, fetchBusStops, isLoading, error, searchParams } = useBusStore();
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -83,8 +85,8 @@ export default function StopsScreen() {
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <View>
-              <Text style={styles.title}>Bus Stops</Text>
-              <Text style={styles.subtitle}>Find stops and check incoming buses</Text>
+              <Text style={styles.title}>{t('stops.title')}</Text>
+              <Text style={styles.subtitle}>{t('stops.subtitle')}</Text>
             </View>
             <TouchableOpacity
               style={styles.refreshButton}
@@ -102,7 +104,7 @@ export default function StopsScreen() {
         
         <View style={styles.searchContainer}>
           <Input
-            placeholder="Search stops by name or route"
+            placeholder={t('stops.searchPlaceholder')}
             value={searchQuery}
             onChangeText={handleSearch}
             leftIcon={<Ionicons name="search" size={20} color={colors.textSecondary} />}
@@ -134,10 +136,10 @@ export default function StopsScreen() {
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>
                 {isLoading
-                  ? 'Loading stops...'
+                  ? t('stops.loadingStops')
                   : searchQuery
-                    ? 'No stops match your search'
-                    : 'No stops available'}
+                    ? t('stops.noStops')
+                    : t('stops.noStops')}
               </Text>
             </View>
           }
@@ -154,7 +156,7 @@ export default function StopsScreen() {
                   >
                     <View style={styles.loadMoreContent}>
                       <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
-                      <Text style={styles.loadMoreText}>Load More Stops</Text>
+                      <Text style={styles.loadMoreText}>{t('common.loadMore')} {t('stops.title')}</Text>
                     </View>
                   </TouchableOpacity>
                 </View>
@@ -164,7 +166,7 @@ export default function StopsScreen() {
               {loadingMore && (
                 <View style={styles.loadingMoreContainer}>
                   <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={styles.loadingMoreText}>Loading more stops...</Text>
+                  <Text style={styles.loadingMoreText}>{t('stops.loadingMoreStops')}</Text>
                 </View>
               )}
             </View>

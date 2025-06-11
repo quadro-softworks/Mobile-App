@@ -21,6 +21,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
 import { Route } from '@/types';
 
 // Simple QR Code Component with value-based pattern
@@ -124,6 +125,7 @@ export default function PaymentsScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { routes, fetchRoutes } = useBusStore();
+  const { t } = useTranslation();
   const [activeTickets, setActiveTickets] = useState<Ticket[]>(mockTickets);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [showQRCode, setShowQRCode] = useState(false);
@@ -525,23 +527,23 @@ export default function PaymentsScreen() {
           style={styles.contentContainerPadded} // Add padding to ScrollView itself
         >
         <View style={styles.header}>
-          <Text style={styles.title}>Tickets & Payments</Text>
-          <Text style={styles.subtitle}>Manage your tickets and payment methods</Text>
+          <Text style={styles.title}>{t('payments.title')}</Text>
+          <Text style={styles.subtitle}>{t('payments.subtitle')}</Text>
         </View>
         
         {/* Origin and Destination Selection */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Select Route</Text>
-          <Text style={styles.sectionSubtitle}>Choose your origin and destination</Text>
+          <Text style={styles.sectionTitle}>{t('payments.selectRoute')}</Text>
+          <Text style={styles.sectionSubtitle}>{t('payments.chooseOriginDestination')}</Text>
 
           {/* Origin Input */}
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>From</Text>
+            <Text style={styles.inputLabel}>{t('payments.from')}</Text>
             <View style={styles.autocompleteContainer}>
               <View style={styles.textInputWrapper}>
                 <Ionicons name="location" size={20} color={colors.primary} style={styles.inputIcon} />
                 <TextInput
-                  placeholder="Enter origin"
+                  placeholder={t('payments.enterOrigin')}
                   value={origin}
                   onChangeText={handleOriginChange}
                   style={styles.locationInput}
@@ -567,12 +569,12 @@ export default function PaymentsScreen() {
 
           {/* Destination Input */}
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>To</Text>
+            <Text style={styles.inputLabel}>{t('payments.to')}</Text>
             <View style={styles.autocompleteContainer}>
               <View style={styles.textInputWrapper}>
                 <Ionicons name="flag" size={20} color={colors.primary} style={styles.inputIcon} />
                 <TextInput
-                  placeholder="Enter destination"
+                  placeholder={t('payments.enterDestination')}
                   value={destination}
                   onChangeText={handleDestinationChange}
                   style={styles.locationInput}
@@ -612,7 +614,7 @@ export default function PaymentsScreen() {
                 <View style={styles.payButtonContent}>
                   <Ionicons name="card" size={20} color={colors.card} />
                   <Text style={styles.payButtonText}>
-                    Pay ${routePrice}.00
+                    {t('payments.pay')} ${routePrice}.00
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -621,7 +623,7 @@ export default function PaymentsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Tickets</Text>
+          <Text style={styles.sectionTitle}>{t('payments.yourTickets')}</Text>
           
           {activeTickets.length > 0 ? (
             activeTickets.map((ticket) => (

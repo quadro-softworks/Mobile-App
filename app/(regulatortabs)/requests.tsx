@@ -12,6 +12,7 @@ import {
   FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -35,6 +36,7 @@ interface RequestType {
 
 export default function RequestsScreen() {
   const { user } = useAuthStore();
+  const { t } = useTranslation();
   const [requests, setRequests] = useState<Request[]>([]);
   const [selectedRequestType, setSelectedRequestType] = useState<RequestType | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -191,7 +193,7 @@ export default function RequestsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Requests</Text>
+        <Text style={styles.title}>{t('regulator.requests')}</Text>
         <Text style={styles.subtitle}>Control Center Communication</Text>
       </View>
 

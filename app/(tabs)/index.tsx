@@ -6,6 +6,7 @@ import { useBusStore } from '@/stores/busStore';
 import { BusCard } from '@/components/BusCard';
 import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
 import { Card } from '@/components/ui/Card';
 import { Bus } from '@/types';
 import { busStopsGeoJSON } from '@/utils/busStopsData';
@@ -13,6 +14,7 @@ import { busStopsGeoJSON } from '@/utils/busStopsData';
 export default function MapScreen() {
   const router = useRouter();
   const { buses, fetchBuses, isLoading } = useBusStore();
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredBuses, setFilteredBuses] = useState<Bus[]>([]);
   const [isMapFullScreen, setMapFullScreen] = useState(false);
@@ -73,8 +75,8 @@ export default function MapScreen() {
       {!isMapFullScreen && (
         <View style={styles.headerSearchContainerPadded}>
           <View style={styles.header}>
-            <Text style={styles.title}>Live Bus Tracking</Text>
-            <Text style={styles.subtitle}>Find and track buses in real-time</Text>
+            <Text style={styles.title}>{t('map.title')}</Text>
+            <Text style={styles.subtitle}>{t('map.trackBuses')}</Text>
           </View>
         </View>
       )}
@@ -174,13 +176,13 @@ export default function MapScreen() {
       {!isMapFullScreen && (
         <View style={styles.listContainerPadded}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Nearby Buses</Text>
+            <Text style={styles.sectionTitle}>{t('map.findNearbyStops')}</Text>
             <TouchableOpacity onPress={() => router.push('/all-buses')}>
               <Text style={styles.viewAllText}>View All</Text>
             </TouchableOpacity>
           </View>
           {isLoading ? (
-            <Text style={styles.loadingText}>Loading buses...</Text>
+            <Text style={styles.loadingText}>{t('common.loading')}</Text>
           ) : filteredBuses.length > 0 ? (
             <FlatList
               data={filteredBuses.slice(0, 3)} // Show only first 3 buses

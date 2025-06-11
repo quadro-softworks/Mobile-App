@@ -11,6 +11,7 @@ import {
 import * as Location from 'expo-location';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
 import { busStopsGeoJSON } from '@/utils/busStopsData';
@@ -18,6 +19,7 @@ import Constants from 'expo-constants';
 
 export default function DriverMapScreen() {
   const {} = useAuthStore();
+  const { t } = useTranslation();
   const [isOnDuty, setIsOnDuty] = useState(false);
   const [currentLocation, setCurrentLocation] = useState({ lat: 9.0301, lng: 38.7578 });
   const [locationSubscription, setLocationSubscription] = useState<any>(null);
@@ -144,8 +146,8 @@ export default function DriverMapScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Driver Dashboard</Text>
-          <Text style={styles.subtitle}>Route Management & Navigation</Text>
+          <Text style={styles.title}>{t('driver.title')}</Text>
+          <Text style={styles.subtitle}>{t('driver.subtitle')}</Text>
         </View>
         <View style={styles.dutyToggle}>
           <Text style={[styles.dutyText, { color: isOnDuty ? colors.success : colors.textSecondary }]}>

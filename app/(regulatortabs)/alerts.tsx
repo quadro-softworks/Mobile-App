@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
 import { colors } from '@/constants/colors';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { NotificationItem } from '@/components/NotificationItem';
@@ -32,6 +33,7 @@ interface AlertItem {
 
 export default function AlertsScreen() {
   const { user } = useAuthStore();
+  const { t } = useTranslation();
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'alerts' | 'notifications'>('alerts');
@@ -274,7 +276,7 @@ export default function AlertsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Alerts & Notifications</Text>
+          <Text style={styles.title}>{t('regulator.alerts')} & {t('notifications.title')}</Text>
           <Text style={styles.subtitle}>
             {currentUnreadCount > 0 ? `${currentUnreadCount} unread ${activeTab}` : `All ${activeTab} read`}
             {criticalCount > 0 && ` • ${criticalCount} critical`}

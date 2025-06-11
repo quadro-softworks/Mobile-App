@@ -12,6 +12,8 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
+import { LanguageSelector } from '@/components/LanguageSelector';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
 import { router } from 'expo-router';
@@ -34,6 +36,7 @@ interface AssignedBus {
 
 export default function DriverProfileScreen() {
   const { user, logout, updateProfile, isLoading } = useAuthStore();
+  const { t } = useTranslation();
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
@@ -177,20 +180,20 @@ export default function DriverProfileScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Profile</Text>
+          <Text style={styles.title}>{t('driver.profile')}</Text>
           <Text style={styles.subtitle}>Driver Information & Settings</Text>
         </View>
 
         {/* Driver Details */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Driver Details</Text>
+            <Text style={styles.sectionTitle}>{t('profile.personalInfo')}</Text>
             <TouchableOpacity
               style={styles.editButton}
               onPress={() => setShowEditModal(true)}
             >
               <Ionicons name="pencil" size={16} color={colors.primary} />
-              <Text style={styles.editButtonText}>Edit</Text>
+              <Text style={styles.editButtonText}>{t('common.edit')}</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.card}>
@@ -251,17 +254,12 @@ export default function DriverProfileScreen() {
 
         {/* Settings */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Settings</Text>
+          <Text style={styles.sectionTitle}>{t('profile.settings')}</Text>
           <View style={styles.card}>
-            {renderProfileItem(
-              'language',
-              'Language',
-              selectedLanguage,
-              () => setShowLanguageModal(true)
-            )}
+            <LanguageSelector />
             {renderProfileItem(
               'help-circle',
-              'Help & Support',
+              t('profile.help'),
               'Contact support team',
               () => Alert.alert('Support', 'Contact: +251-11-123-4567\nEmail: support@guzosync.com')
             )}

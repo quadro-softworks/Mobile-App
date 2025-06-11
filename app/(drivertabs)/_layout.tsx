@@ -5,9 +5,11 @@ import { useBusStore } from '@/stores/busStore';
 import { useAlertStore } from '@/stores/alertStore';
 import { colors } from '@/constants/colors';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
 
 export default function DriverTabs() {
   const { user } = useAuthStore();
+  const { t } = useTranslation();
   const setupBusWebSocketListeners = useBusStore((state) => state.setupWebSocketListeners);
   const setupAlertWebSocketListeners = useAlertStore((state) => state.setupWebSocketListeners);
 
@@ -55,28 +57,28 @@ export default function DriverTabs() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Map",
+          title: t('driver.dashboard'),
           tabBarIcon: ({ color, size }) => <Ionicons name="map" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="messages"
         options={{
-          title: "Messages",
+          title: t('driver.messages'),
           tabBarIcon: ({ color, size }) => <Ionicons name="chatbubbles" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="report"
         options={{
-          title: "Report",
+          title: t('driver.report'),
           tabBarIcon: ({ color, size }) => <MaterialIcons name="report" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
+          title: t('driver.profile'),
           tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
         }}
       />

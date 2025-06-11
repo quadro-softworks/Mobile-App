@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
 import { busStopsGeoJSON } from '@/utils/busStopsData';
@@ -40,6 +41,7 @@ interface BusStop {
 
 export default function ArrivalsScreen() {
   const { user } = useAuthStore();
+  const { t } = useTranslation();
   const [arrivals, setArrivals] = useState<BusArrival[]>([]);
   const [assignedStop, setAssignedStop] = useState<BusStop>({
     id: 'stop_001',
@@ -257,7 +259,7 @@ export default function ArrivalsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Bus Arrivals</Text>
+          <Text style={styles.title}>{t('regulator.title')}</Text>
           <Text style={styles.subtitle}>{assignedStop.name}</Text>
         </View>
         <TouchableOpacity

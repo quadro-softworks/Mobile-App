@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
 import * as Location from 'expo-location';
 import { colors } from '@/constants/colors';
 import { useIncidentStore } from '@/stores/incidentStore';
@@ -44,6 +45,7 @@ export default function ReportScreen() {
   // Store hooks
   const { reportIncident, incidents, isLoading: incidentLoading, error: incidentError } = useIncidentStore();
   const { buses, routes, fetchBuses, fetchRoutes } = useBusStore();
+  const { t } = useTranslation();
 
   // Form state
   const [selectedReportType, setSelectedReportType] = useState<ReportType | null>(null);
@@ -118,7 +120,7 @@ export default function ReportScreen() {
   const reportTypes: ReportType[] = [
     {
       id: 'vehicle_issue',
-      title: 'Vehicle Issue',
+      title: t('driver.vehicleIssue'),
       description: 'Mechanical problems, maintenance needs',
       icon: 'car-sport',
       color: colors.error,
@@ -132,7 +134,7 @@ export default function ReportScreen() {
     },
     {
       id: 'other',
-      title: 'Other',
+      title: t('driver.other'),
       description: 'General reports and feedback',
       icon: 'document-text',
       color: colors.textSecondary,
@@ -240,8 +242,8 @@ export default function ReportScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Reports</Text>
-        <Text style={styles.subtitle}>Submit incidents and issues</Text>
+        <Text style={styles.title}>{t('driver.report')}</Text>
+        <Text style={styles.subtitle}>{t('driver.reportIssue')}</Text>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>

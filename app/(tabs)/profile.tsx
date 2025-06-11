@@ -1,51 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ScrollView, 
-  Switch, 
-  Alert, 
-  Image,
-  Platform,
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
   Pressable
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 
-import { useNotificationStore } from '@/stores/notificationStore';
-import { useBusStore } from '@/stores/busStore';
+
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { colors } from '@/constants/colors';
 // import * as ImagePicker from 'expo-image-picker';
-import { Ionicons, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
+import { LanguageSelector } from '@/components/LanguageSelector';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, logout, updateProfile, updateNotificationSettings, fetchCurrentUser, isLoading } = useAuthStore();
-  const { notifications, fetchNotifications } = useNotificationStore();
-  const { fetchBusStops, fetchRoutes } = useBusStore();
+  const { user, logout, updateProfile, isLoading } = useAuthStore();
+  const { t } = useTranslation();
 
-  const [pushEnabled, setPushEnabled] = useState(
-    user?.notificationSettings?.pushEnabled ?? true
-  );
-  const [emailEnabled, setEmailEnabled] = useState(
-    user?.notificationSettings?.emailEnabled ?? true
-  );
-  const [avatar, setAvatar] = useState<string | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  
+
   useEffect(() => {
     if (user) {
-      fetchNotifications();
-      fetchBusStops();
-      fetchRoutes();
       // Initialize form fields with user data
       const nameParts = user.name.split(' ');
       setFirstName(nameParts[0] || '');
@@ -53,19 +40,19 @@ export default function ProfileScreen() {
       setEmail(user.email || '');
       setPhone(user.phone || '');
     }
-  }, [user, fetchNotifications, fetchBusStops, fetchRoutes]);
+  }, [user]);
   
   const handleLogout = async () => {
     Alert.alert(
-      'Logout',
+      t('profile.logout'),
       'Are you sure you want to logout?',
       [
         {
-          text: 'Cancel',
+          text: t('common.cancel'),
           style: 'cancel',
         },
         {
-          text: 'Logout',
+          text: t('profile.logout'),
           onPress: async () => {
             await logout();
             router.replace('/login');
@@ -79,24 +66,7 @@ export default function ProfileScreen() {
     router.push('/feedback');
   };
   
-  const handleNotifications = () => {
-    fetchNotifications();
-    router.push('/notification-settings');
-  };
-  
-  const togglePushNotifications = async (value: boolean) => {
-    setPushEnabled(value);
-    await updateNotificationSettings({
-      pushEnabled: value,
-    });
-  };
-  
-  const toggleEmailNotifications = async (value: boolean) => {
-    setEmailEnabled(value);
-    await updateNotificationSettings({
-      emailEnabled: value,
-    });
-  };
+
   
   // const pickImage = async () => {
   //   try {
@@ -135,7 +105,7 @@ export default function ProfileScreen() {
         last_name: lastName,
         email: email,
         phone_number: phone,
-        profile_image: avatar || '',
+        profile_image: '',
       });
       setIsEditingProfile(false);
       Alert.alert('Success', 'Profile updated successfully');
@@ -144,31 +114,9 @@ export default function ProfileScreen() {
     }
   };
   
-  const handleViewFavoriteStops = () => {
-    router.push('/favorite-stops');
-  };
-  
-  const handleViewFavoriteRoutes = () => {
-    router.push('/favorite-routes');
-  };
-  
-  const handleLanguageSettings = () => {
-    router.push('/language-settings');
-  };
 
-  const handlePaymentMethods = () => {
-    router.push('/payment-methods');
-  };
-
-  const handlePurchaseHistory = () => {
-    router.push('/purchase-history');
-  };
-
-  const handlePrivacySettings = () => {
-    router.push('/privacy-settings');
-  };
   
-  const unreadNotifications = notifications.filter(n => !n.read).length;
+
   
   if (!user) {
     return (
@@ -177,18 +125,18 @@ export default function ProfileScreen() {
           <View style={styles.emptyStateIconContainer}>
             <Ionicons name="person" size={60} color={colors.card} />
           </View>
-          <Text style={styles.emptyStateTitle}>Sign In Required</Text>
+          <Text style={styles.emptyStateTitle}>{t('auth.login')} Required</Text>
           <Text style={styles.emptyStateText}>
             Please sign in to access your profile and personalized features
           </Text>
-          <Button 
-            title="Sign In" 
-            onPress={() => router.replace('/login')} 
+          <Button
+            title={t('auth.login')}
+            onPress={() => router.replace('/login')}
             style={styles.signInButton}
           />
-          <Button 
-            title="Create Account" 
-            onPress={() => router.replace('/register')} 
+          <Button
+            title={t('auth.createAccount')}
+            onPress={() => router.replace('/register')}
             variant="outline"
             style={styles.createAccountButton}
           />
@@ -205,13 +153,9 @@ export default function ProfileScreen() {
           // onPress={pickImage}
           activeOpacity={0.8}
         >
-          {avatar ? (
-            <Image source={{ uri: avatar }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Ionicons name="person" size={40} color={colors.card} />
-            </View>
-          )}
+          <View style={styles.avatarPlaceholder}>
+            <Ionicons name="person" size={40} color={colors.card} />
+          </View>
           <View style={styles.cameraButton}>
             <Ionicons name="camera" size={16} color={colors.card} />
           </View>
@@ -285,18 +229,18 @@ export default function ProfileScreen() {
               style={styles.editButton}
               onPress={() => setIsEditingProfile(true)}
             >
-              <Text style={styles.editButtonText}>Edit Profile</Text>
+              <Text style={styles.editButtonText}>{t('profile.editProfile')}</Text>
             </TouchableOpacity>
           </>
         )}
       </View>
       
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account Information</Text>
+        <Text style={styles.sectionTitle}>{t('profile.personalInfo')}</Text>
         <Card style={styles.card}>
           <View style={styles.infoItem}>
             <Ionicons name="mail" size={20} color={colors.primary} />
-            <Text style={styles.infoLabel}>Email</Text>
+            <Text style={styles.infoLabel}>{t('profile.email')}</Text>
             <Text style={styles.infoValue}>{user.email}</Text>
           </View>
           
@@ -304,30 +248,13 @@ export default function ProfileScreen() {
           
           <View style={styles.infoItem}>
             <Ionicons name="call" size={20} color={colors.primary} />
-            <Text style={styles.infoLabel}>Phone</Text>
+            <Text style={styles.infoLabel}>{t('profile.phone')}</Text>
             <Text style={styles.infoValue}>{user.phone || 'Not set'}</Text>
           </View>
           
           <View style={styles.divider} />
           
-          <Pressable 
-            style={({ pressed }) => [
-              styles.menuItem,
-              pressed ? styles.menuItemPressed : {}
-            ]}
-            onPress={handleLanguageSettings}
-          >
-            <View style={styles.menuLabelContainer}>
-              <Ionicons name="language" size={20} color={colors.primary} />
-              <Text style={styles.menuLabel}>Language</Text>
-            </View>
-            <View style={styles.menuAction}>
-              <Text style={styles.languageValue}>
-                {user.language === 'en' ? 'English' : user.language}
-              </Text>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-            </View>
-          </Pressable>
+          <LanguageSelector />
 
           <View style={styles.divider} />
           
@@ -336,7 +263,7 @@ export default function ProfileScreen() {
               styles.menuItem,
               pressed ? styles.menuItemPressed : {}
             ]}
-            onPress={handlePrivacySettings}
+            onPress={() => router.push('/privacy-settings')}
           >
             <View style={styles.menuLabelContainer}>
               <Ionicons name="shield-checkmark" size={20} color={colors.primary} />
@@ -347,147 +274,10 @@ export default function ProfileScreen() {
         </Card>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Payments</Text>
-        <Card style={styles.card}>
-          <Pressable 
-            style={({ pressed }) => [
-              styles.menuItem,
-              pressed ? styles.menuItemPressed : {}
-            ]}
-            onPress={handlePaymentMethods}
-          >
-            <View style={styles.menuLabelContainer}>
-              <FontAwesome name="credit-card" size={20} color={colors.primary} />
-              <Text style={styles.menuLabel}>Payment Methods</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-          </Pressable>
-          
-          <View style={styles.divider} />
-          
-          <Pressable 
-            style={({ pressed }) => [
-              styles.menuItem,
-              pressed ? styles.menuItemPressed : {}
-            ]}
-            onPress={handlePurchaseHistory}
-          >
-            <View style={styles.menuLabelContainer}>
-              <FontAwesome name="credit-card" size={20} color={colors.primary} />
-              <Text style={styles.menuLabel}>Purchase History</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-          </Pressable>
-        </Card>
-      </View>
+
+
       
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Favorites</Text>
-        <Card style={styles.card}>
-          <Pressable 
-            style={({ pressed }) => [
-              styles.menuItem,
-              pressed ? styles.menuItemPressed : {}
-            ]}
-            onPress={handleViewFavoriteStops}
-          >
-            <View style={styles.menuLabelContainer}>
-              <Ionicons name="location-sharp" size={20} color={colors.primary} />
-              <Text style={styles.menuLabel}>Favorite Stops</Text>
-            </View>
-            <View style={styles.menuAction}>
-              <View style={styles.countBadgeContainer}>
-                <Text style={styles.countBadge}>
-                  {user.favoriteStops?.length || 0}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-            </View>
-          </Pressable>
-          
-          <View style={styles.divider} />
-          
-          <Pressable 
-            style={({ pressed }) => [
-              styles.menuItem,
-              pressed ? styles.menuItemPressed : {}
-            ]}
-            onPress={handleViewFavoriteRoutes}
-          >
-            <View style={styles.menuLabelContainer}>
-              <MaterialCommunityIcons name="bus" size={20} color={colors.primary} />
-              <Text style={styles.menuLabel}>Favorite Routes</Text>
-            </View>
-            <View style={styles.menuAction}>
-              <View style={styles.countBadgeContainer}>
-                <Text style={styles.countBadge}>
-                  {user.favoriteRoutes?.length || 0}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-            </View>
-          </Pressable>
-        </Card>
-      </View>
-      
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Notifications</Text>
-        <Card style={styles.card}>
-          <View style={styles.settingItem}>
-            <View style={styles.settingLabelContainer}>
-              <Ionicons name="notifications" size={20} color={colors.primary} />
-              <Text style={styles.settingLabel}>Push Notifications</Text>
-            </View>
-            <Switch
-              value={pushEnabled}
-              onValueChange={togglePushNotifications}
-              trackColor={{ false: colors.inactive, true: colors.primary }}
-              thumbColor={colors.card}
-              ios_backgroundColor={colors.inactive}
-            />
-          </View>
-          
-          <View style={styles.divider} />
-          
-          <View style={styles.settingItem}>
-            <View style={styles.settingLabelContainer}>
-              <Ionicons name="mail" size={20} color={colors.primary} />
-              <Text style={styles.settingLabel}>Email Notifications</Text>
-            </View>
-            <Switch
-              value={emailEnabled}
-              onValueChange={toggleEmailNotifications}
-              trackColor={{ false: colors.inactive, true: colors.primary }}
-              thumbColor={colors.card}
-              ios_backgroundColor={colors.inactive}
-            />
-          </View>
-          
-          <View style={styles.divider} />
-          
-          <Pressable 
-            style={({ pressed }) => [
-              styles.menuItem,
-              pressed ? styles.menuItemPressed : {}
-            ]}
-            onPress={handleNotifications}
-          >
-            <View style={styles.menuLabelContainer}>
-              <Ionicons name="settings" size={20} color={colors.primary} />
-              <Text style={styles.menuLabel}>Notification Settings</Text>
-            </View>
-            <View style={styles.menuAction}>
-              {unreadNotifications > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{unreadNotifications}</Text>
-                </View>
-              )}
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-            </View>
-          </Pressable>
-        </Card>
-      </View>
+
       
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Support</Text>

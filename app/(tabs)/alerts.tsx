@@ -4,10 +4,12 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import { NotificationItem } from '@/components/NotificationItem';
 import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
 import { Notification } from '@/types';
 
 export default function AlertsScreen() {
   const { notifications, fetchNotifications, markNotificationAsRead, markAllAsRead, isLoading } = useNotificationStore();
+  const { t } = useTranslation();
 
   useEffect(() => {
     fetchNotifications();
@@ -26,11 +28,11 @@ export default function AlertsScreen() {
       <View style={styles.contentContainerPadded}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.title}>Notifications</Text>
+            <Text style={styles.title}>{t('notifications.title')}</Text>
             <Text style={styles.subtitle}>
               {unreadNotificationsCount > 0
-                ? `You have ${unreadNotificationsCount} unread notifications`
-                : 'Stay updated with notifications'}
+                ? `${unreadNotificationsCount} ${t('notifications.unreadNotifications')}`
+                : t('notifications.stayUpdated')}
             </Text>
           </View>
           <TouchableOpacity
@@ -55,8 +57,8 @@ export default function AlertsScreen() {
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>
                 {isLoading
-                  ? 'Loading notifications...'
-                  : 'No notifications available'}
+                  ? t('notifications.loadingNotifications')
+                  : t('notifications.noNotifications')}
               </Text>
             </View>
           }

@@ -6,9 +6,11 @@ import { useAlertStore } from '@/stores/alertStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { colors } from '@/constants/colors';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
 
 export default function TabLayout() {
   const { user } = useAuthStore();
+  const { t } = useTranslation();
   const setupBusWebSocketListeners = useBusStore((state) => state.setupWebSocketListeners);
   const setupAlertWebSocketListeners = useAlertStore((state) => state.setupWebSocketListeners);
   const fetchNotifications = useNotificationStore((state) => state.fetchNotifications);
@@ -60,35 +62,35 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Map",
+          title: t('navigation.map'),
           tabBarIcon: ({ color, size }) => <Ionicons name="map" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="stops"
         options={{
-          title: "Stops",
+          title: t('navigation.stops'),
           tabBarIcon: ({ color, size }) => <Ionicons name="location-sharp" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="payments"
         options={{
-          title: "Tickets",
+          title: t('navigation.tickets'),
           tabBarIcon: ({ color, size }) => <FontAwesome name="ticket" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="alerts"
         options={{
-          title: "Alerts",
+          title: t('navigation.alerts'),
           tabBarIcon: ({ color, size }) => <Ionicons name="notifications" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
+          title: t('navigation.profile'),
           tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
         }}
       />
