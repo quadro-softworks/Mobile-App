@@ -81,14 +81,18 @@ export default function RequestsScreen() {
       return;
     }
 
+    // Require passengerCount for overcrowding
+    if (selectedRequestType.id === 'overcrowding' && !passengerCount.trim()) {
+      Alert.alert('Error', 'Estimated Passenger Count is required');
+      return;
+    }
+
     try {
       let description = requestDescription.trim();
 
       // Add specific fields based on request type
       if (selectedRequestType.id === 'overcrowding') {
-        if (passengerCount.trim()) {
-          description = `Estimated passengers: ${passengerCount}. ${description}`;
-        }
+        description = `Estimated passengers: ${passengerCount}. ${description}`;
       }
 
       const newRequest: Request = {
@@ -114,8 +118,6 @@ export default function RequestsScreen() {
       Alert.alert('Error', 'Failed to submit request');
     }
   };
-
-
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -167,8 +169,6 @@ export default function RequestsScreen() {
     </View>
   );
 
-
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -215,33 +215,39 @@ export default function RequestsScreen() {
               <Text style={styles.cancelButton}>Cancel</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Submit Request</Text>
-            <TouchableOpacity onPress={submitRequest}>
-              <Text style={styles.submitButton}>Submit</Text>
-            </TouchableOpacity>
+            {/* Removed header submit button */}
+            <View style={{ width: 60 }} />
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView 
+            style={styles.modalContent} 
+            contentContainerStyle={styles.modalScrollView}
+            keyboardShouldPersistTaps="handled"
+          >
             {selectedRequestType && (
               <View style={styles.selectedTypeContainer}>
                 <View style={[styles.iconContainer, { backgroundColor: selectedRequestType.color + '20' }]}>
-                  <Ionicons name={selectedRequestType.icon as any} size={24} color={selectedRequestType.color} />
+                  <Ionicons 
+                    name={selectedRequestType.icon as any} 
+                    size={24} 
+                    color={selectedRequestType.color} 
+                  />
                 </View>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.selectedTypeTitle}>{selectedRequestType.title}</Text>
                   <Text style={styles.selectedTypeDescription}>{selectedRequestType.description}</Text>
                 </View>
               </View>
             )}
 
-
-
             {/* Overcrowding specific fields */}
             {selectedRequestType?.id === 'overcrowding' && (
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Estimated Passenger Count</Text>
+                <Text style={styles.inputLabel}>Estimated Passenger Count *</Text>
                 <TextInput
                   style={styles.textInput}
                   placeholder="e.g., 25"
+                  placeholderTextColor={colors.textSecondary + '80'}
                   value={passengerCount}
                   onChangeText={setPassengerCount}
                   keyboardType="numeric"
@@ -255,10 +261,11 @@ export default function RequestsScreen() {
               <TextInput
                 style={styles.textArea}
                 placeholder="Describe the situation in detail..."
+                placeholderTextColor={colors.textSecondary + '80'}
                 value={requestDescription}
                 onChangeText={setRequestDescription}
                 multiline
-                numberOfLines={4}
+                textAlignVertical="top"
                 maxLength={500}
               />
               <Text style={styles.characterCount}>{requestDescription.length}/500</Text>
@@ -271,6 +278,17 @@ export default function RequestsScreen() {
               </Text>
             </View>
           </ScrollView>
+
+          {/* Fixed Submit Button */}
+          <View style={styles.fixedSubmitButton}>
+            <TouchableOpacity 
+              style={[styles.submitButton, { opacity: requestDescription.trim() ? 1 : 0.6 }]} 
+              onPress={submitRequest}
+              disabled={!requestDescription.trim()}
+            >
+              <Text style={styles.submitButtonText}>Submit Request</Text>
+            </TouchableOpacity>
+          </View>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -322,31 +340,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 16,
+    backgroundColor: colors.primary + '15',
   },
   requestTypeContent: {
     flex: 1,
   },
   requestTypeTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 2,
+    marginBottom: 4,
   },
   requestTypeDescription: {
     fontSize: 14,
     color: colors.textSecondary,
+    lineHeight: 20,
   },
   requestCard: {
     backgroundColor: colors.card,
@@ -409,42 +437,87 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  modalScrollView: {
+    paddingBottom: 100, // Extra space for the fixed submit button
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    backgroundColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 4,
+    zIndex: 10,
   },
   cancelButton: {
     fontSize: 16,
-    color: colors.textSecondary,
+    color: colors.primary,
+    fontWeight: '500',
+    padding: 8,
+    marginLeft: -8,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.text,
+    textAlign: 'center',
+    flex: 1,
+    marginHorizontal: 16,
   },
   submitButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  submitButtonText: {
+    color: 'white',
     fontSize: 16,
-    color: colors.primary,
     fontWeight: '600',
+  },
+  fixedSubmitButton: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background,
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   modalContent: {
     flex: 1,
-    padding: 16,
+    padding: 20,
+    paddingBottom: 100, // Space for the fixed submit button
   },
   selectedTypeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 24,
     borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   selectedTypeTitle: {
     fontSize: 16,
@@ -457,7 +530,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   inputLabel: {
     fontSize: 16,
@@ -468,22 +541,24 @@ const styles = StyleSheet.create({
   textInput: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 15,
     color: colors.text,
     backgroundColor: colors.card,
+    height: 50,
   },
   textArea: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 15,
     color: colors.text,
     backgroundColor: colors.card,
-    height: 100,
+    height: 150,
     textAlignVertical: 'top',
+    lineHeight: 22,
   },
   characterCount: {
     fontSize: 12,
@@ -493,17 +568,20 @@ const styles = StyleSheet.create({
   },
   infoContainer: {
     flexDirection: 'row',
-    backgroundColor: colors.primary + '10',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 20,
+    backgroundColor: colors.primary + '08',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+    alignItems: 'flex-start',
   },
   infoText: {
     fontSize: 14,
     color: colors.text,
-    marginLeft: 8,
+    marginLeft: 12,
     flex: 1,
-    lineHeight: 20,
+    lineHeight: 21,
   },
 
 });
