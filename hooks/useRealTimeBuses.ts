@@ -135,11 +135,25 @@ export function useRealTimeBuses(): UseRealTimeBusesReturn {
 
   // Monitor auth changes and retry connection when token becomes available
   useEffect(() => {
-    if (hasHydrated && token && busTrackingSocket.isUsingFallback()) {
+    if (hasHydrated && token && !busTrackingSocket.isConnected()) {
       console.log('🔑 Auth token available, retrying WebSocket connection...');
       busTrackingSocket.retryWithAuth();
     }
   }, [token, hasHydrated]);
+
+  // Periodic retry for disconnected state
+  useEffect(() => {
+    if (!isConnected && hasHydrated && token) {
+      const retryInterval = setInterval(() => {
+        if (!busTrackingSocket.isConnected()) {
+          console.log('🔄 Periodic retry attempt for WebSocket connection...');
+          busTrackingSocket.retryWithAuth();
+        }
+      }, 10000); // Retry every 10 seconds
+
+      return () => clearInterval(retryInterval);
+    }
+  }, [isConnected, hasHydrated, token]);
 
   // Set up WebSocket listeners
   useEffect(() => {

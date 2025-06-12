@@ -49,7 +49,7 @@ export default function FavoriteStopsScreen() {
   
   const renderStopItem = ({ item }: { item: BusStop }) => (
     <View style={styles.stopItemContainer}>
-      <StopCard stop={item} onPress={handleStopPress} />
+      <StopCard stop={item} />
       <TouchableOpacity 
         style={styles.removeButton}
         onPress={() => handleRemoveFavorite(item.id)}

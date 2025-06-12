@@ -87,7 +87,21 @@ class BusTrackingSocket {
 
       if (!this.authToken) {
         console.warn('⚠️ No auth token available, cannot connect to real-time data');
+        console.log('🔍 Auth state details:', {
+          hasHydrated: authState.hasHydrated,
+          userExists: !!authState.user,
+          userEmail: authState.user?.email,
+          tokenExists: !!authState.token
+        });
         this.connectionStatus = 'disconnected';
+
+        // Schedule retry if auth store hasn't hydrated yet
+        if (!authState.hasHydrated) {
+          console.log('⏳ Auth store not hydrated yet, will retry in 2 seconds...');
+          setTimeout(() => {
+            this.connect();
+          }, 2000);
+        }
         return;
       }
 
@@ -379,8 +393,26 @@ class BusTrackingSocket {
   // Retry connection when auth becomes available
   retryWithAuth() {
     console.log('🔄 Retrying connection with auth...');
+
+    // Reset connection state
     this.connectionStatus = 'disconnected';
+    this.reconnectAttempts = 0;
+    this.currentEndpointIndex = 0;
+
+    // Close existing connection if any
+    if (this.socket) {
+      this.socket.close();
+      this.socket = null;
+    }
+
+    // Attempt new connection
     this.connect();
+  }
+
+  // Force reconnection (for manual retry)
+  forceReconnect() {
+    console.log('🔄 Force reconnecting WebSocket...');
+    this.retryWithAuth();
   }
 
   // Disconnect

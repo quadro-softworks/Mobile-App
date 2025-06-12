@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Text, FlatList, Platform, SafeAreaView, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+// import { useRouter } from 'expo-router'; // Removed - not needed since cards aren't clickable
 import { useBusStore } from '@/stores/busStore';
 import { StopCard } from '@/components/StopCard'; // Assuming this component exists
 import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
 import { Input } from '@/components/ui/Input';
-import { BusStop } from '@/types';
+// import { BusStop } from '@/types'; // Removed - not needed since no navigation
 
 export default function StopsScreen() {
-  const router = useRouter();
+  // const router = useRouter(); // Removed - not needed since cards aren't clickable
   const { stops, fetchBusStops, isLoading, error, searchParams } = useBusStore();
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');

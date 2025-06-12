@@ -491,19 +491,42 @@ export default function MapScreen() {
             <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
               Bus stops: {busStopsForMap.length} | Live tracking buses: {busesForMap.length}
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: isRealTimeConnected ? '#10B981' : isUsingFallback ? '#F59E0B' : '#EF4444',
-                marginRight: 6
-              }} />
-              <Text style={{ fontSize: 11, color: colors.textSecondary }}>
-                {isRealTimeConnected ? 'Real-time connected' :
-                 isUsingFallback ? 'Using fallback data' :
-                 'Real-time disconnected'}
-              </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: isRealTimeConnected ? '#10B981' : isUsingFallback ? '#F59E0B' : '#EF4444',
+                  marginRight: 6
+                }} />
+                <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+                  {isRealTimeConnected ? 'Real-time connected' :
+                   isUsingFallback ? 'Using fallback data' :
+                   'Real-time disconnected'}
+                </Text>
+              </View>
+
+              {/* Retry button when disconnected */}
+              {!isRealTimeConnected && (
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('🔄 Manual retry requested');
+                    const { busTrackingSocket } = require('@/utils/socket');
+                    busTrackingSocket.forceReconnect();
+                  }}
+                  style={{
+                    backgroundColor: colors.primary,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 10, color: 'white', fontWeight: '600' }}>
+                    Retry
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -617,7 +640,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   mapContainer: {
-    height: 600, // Default height for the map
+    height: 530, // Default height for the map
     marginHorizontal: 8, // Add horizontal margin to match padding of other elements
     borderRadius: 12, // Rounded corners for the map container
     overflow: 'hidden', // Ensures the MapView respects the border radius
