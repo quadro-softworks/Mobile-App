@@ -113,17 +113,6 @@ export default function NotificationsScreen() {
         }
       />
 
-      {/* Floating Action Button for Chat */}
-      <FloatingActionButton
-        onPress={() => setIsChatModalVisible(true)}
-        icon="chatbubbles"
-      />
-
-      {/* Chat Modal */}
-      <ChatModal
-        visible={isChatModalVisible}
-        onClose={() => setIsChatModalVisible(false)}
-      />
     </SafeAreaView>
   );
 }
