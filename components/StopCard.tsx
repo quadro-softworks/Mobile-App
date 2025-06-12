@@ -3,8 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Card } from '@/components/ui/Card';
 import { BusStop } from '@/types';
 import { colors } from '@/constants/colors';
-import { Ionicons, FontAwesome } from '@expo/vector-icons';
-import { useAuthStore } from '@/stores/authStore';
+import { Ionicons } from '@expo/vector-icons';
+// import { FontAwesome } from '@expo/vector-icons'; // Removed - heart icon not used
+// import { useAuthStore } from '@/stores/authStore'; // Removed - favorites not used
 
 interface StopCardProps {
   stop: BusStop;
@@ -17,57 +18,14 @@ export const StopCard: React.FC<StopCardProps> = ({
   onPress,
   showFavoriteButton = false
 }) => {
-  const { user, updateProfile } = useAuthStore();
-  const [isFavorite, setIsFavorite] = React.useState(false);
-  
-  React.useEffect(() => {
-    if (user && showFavoriteButton) {
-      const favorites = user.favoriteStops || [];
-      setIsFavorite(favorites.includes(stop.id));
-    }
-  }, [user, stop.id, showFavoriteButton]);
-  
-  const toggleFavorite = async (e: any) => {
-    e.stopPropagation();
-    if (!user) return;
-    
-    try {
-      const favorites = [...(user.favoriteStops || [])];
-      
-      if (isFavorite) {
-        // Remove from favorites
-        const updatedFavorites = favorites.filter(id => id !== stop.id);
-        await updateProfile({ favoriteStops: updatedFavorites });
-      } else {
-        // Add to favorites
-        favorites.push(stop.id);
-        await updateProfile({ favoriteStops: favorites });
-      }
-      
-      setIsFavorite(!isFavorite);
-    } catch (error) {
-      console.error('Failed to update favorites:', error);
-    }
-  };
+  // Removed favorite functionality as heart icon is not needed
   
   return (
     <TouchableOpacity activeOpacity={0.7} onPress={() => onPress(stop)}>
       <Card style={styles.card}>
         <View style={styles.header}>
           <Text style={styles.stopName}>{stop.name}</Text>
-          {showFavoriteButton && (
-            <TouchableOpacity 
-              onPress={toggleFavorite}
-              style={styles.favoriteButton}
-              activeOpacity={0.7}
-            >
-              <FontAwesome 
-                name={isFavorite ? 'heart' : 'heart-o'}
-                size={20}
-                color={isFavorite ? colors.error : colors.textSecondary}
-              />
-            </TouchableOpacity>
-          )}
+          {/* Heart icon removed as requested */}
         </View>
         
         <View style={styles.infoContainer}>
@@ -133,9 +91,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
-  favoriteButton: {
-    padding: 4,
-  },
+  // favoriteButton style removed - not needed anymore
   infoContainer: {
     marginBottom: 12,
   },

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Text, FlatList, Platform, SafeAreaView, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useBusStore } from '@/stores/busStore';
-import { StopCard } from '@/components/StopCard';
+import { StopCard } from '@/components/StopCard'; // Assuming this component exists
 import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
@@ -16,11 +16,11 @@ export default function StopsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  
+
   useEffect(() => {
     fetchBusStops();
   }, [fetchBusStops]);
-  
+
   const handleSearch = (text: string) => {
     setSearchQuery(text);
     if (text.trim()) {
@@ -29,11 +29,11 @@ export default function StopsScreen() {
       fetchBusStops({ pn: 1 });
     }
   };
-  
+
   const handleStopPress = (stop: BusStop) => {
     router.push(`/stop/${stop.id}`);
   };
-  
+
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
@@ -58,7 +58,7 @@ export default function StopsScreen() {
       setLoadingMore(false);
     }
   };
-  
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safeAreaContainer}>
@@ -101,17 +101,24 @@ export default function StopsScreen() {
             </TouchableOpacity>
           </View>
         </View>
-        
+
         <View style={styles.searchContainer}>
-          <Input
-            placeholder={t('stops.searchPlaceholder')}
-            value={searchQuery}
-            onChangeText={handleSearch}
-            leftIcon={<Ionicons name="search" size={20} color={colors.textSecondary} />}
-            style={styles.searchInput}
-          />
+          <View style={styles.searchRow}>
+            <View style={{ flex: 1 }}>
+              <Input
+                placeholder={t('stops.searchPlaceholder')}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                leftIcon={<Ionicons name="search" size={20} color={colors.textSecondary} />}
+                style={styles.searchInput}
+              />
+            </View>
+            <TouchableOpacity style={styles.searchButton} onPress={() => handleSearch(searchQuery)}>
+              <Ionicons name="search" size={20} color={colors.white} />
+            </TouchableOpacity>
+          </View>
         </View>
-        
+
         <FlatList
           data={stops}
           keyExtractor={(item) => item.id}
@@ -119,7 +126,6 @@ export default function StopsScreen() {
             <StopCard
               stop={item}
               onPress={handleStopPress}
-              showFavoriteButton={true}
             />
           )}
           contentContainerStyle={styles.listContent}
@@ -222,6 +228,8 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     marginBottom: 0,
+    borderRadius: 0
+    
   },
   listContent: {
     paddingBottom: 20,
@@ -282,5 +290,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     marginTop: 8,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 0,
+  },
+  searchButton: {
+    backgroundColor: colors.primary,
+    padding: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

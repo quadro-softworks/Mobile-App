@@ -122,20 +122,17 @@ export const Input = React.memo(BaseInput);
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
   },
   label: {
     fontSize: 14,
     fontWeight: '500',
     color: colors.text,
-    marginBottom: 8,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: 12,
     backgroundColor: colors.card,
     height: 52,
   },

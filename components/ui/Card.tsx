@@ -23,7 +23,7 @@ export const Card: React.FC<CardProps> = ({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.card,
-    borderRadius: 16,
+    borderRadius: 5,
     padding: 16,
     overflow: 'hidden',
   },
