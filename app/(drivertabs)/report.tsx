@@ -20,7 +20,7 @@ import { useBusStore } from '@/stores/busStore';
 import { CreateIncidentRequest, IncidentLocation, incidentApi } from '@/services/incidentApi';
 import { Bus, Route } from '@/types';
 import { useWebSocketNotifications } from '@/hooks/useWebSocketNotifications';
-import { manualTest } from '@/utils/websocket-test';
+// import { manualTest } from '@/utils/websocket-test';
 
 interface ReportType {
   id: string;
