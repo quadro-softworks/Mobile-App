@@ -20,6 +20,7 @@ import { useBusStore } from '@/stores/busStore';
 import { CreateIncidentRequest, IncidentLocation, incidentApi } from '@/services/incidentApi';
 import { Bus, Route } from '@/types';
 import { useWebSocketNotifications } from '@/hooks/useWebSocketNotifications';
+import { manualTest } from '@/utils/websocket-test';
 
 interface ReportType {
   id: string;
@@ -49,13 +50,35 @@ export default function ReportScreen() {
   const { t } = useTranslation();
 
   // WebSocket for real-time incident reporting
-  const { sendIncidentReport, isConnected } = useWebSocketNotifications({
+  const { sendIncidentReport, isConnected, connectionStatus } = useWebSocketNotifications({
     onIncidentReported: (incident) => {
       console.log('🚨 Incident reported via WebSocket:', incident.title);
       // Refresh incidents list when new incident is reported
       fetchUserIncidents();
     }
   });
+
+  // Additional connection status monitoring
+  const [realTimeStatus, setRealTimeStatus] = useState<'Active' | 'Connecting' | 'Offline'>('Offline');
+
+  useEffect(() => {
+    const updateStatus = () => {
+      if (isConnected) {
+        setRealTimeStatus('Active');
+      } else if (connectionStatus === 'connecting') {
+        setRealTimeStatus('Connecting');
+      } else {
+        setRealTimeStatus('Offline');
+      }
+    };
+
+    updateStatus();
+
+    // Check status every 2 seconds
+    const statusInterval = setInterval(updateStatus, 2000);
+
+    return () => clearInterval(statusInterval);
+  }, [isConnected, connectionStatus]);
 
   // Form state
   const [selectedReportType, setSelectedReportType] = useState<ReportType | null>(null);
@@ -346,8 +369,8 @@ export default function ReportScreen() {
         <View>
           <Text style={styles.title}>{t('driver.report')}</Text>
           <Text style={styles.subtitle}>{t('driver.reportIssue')}</Text>
-          <Text style={[styles.connectionStatus, { color: isConnected ? colors.success : colors.warning }]}>
-            📡 Real-time reporting: {isConnected ? 'Active' : 'Offline'}
+          <Text style={[styles.connectionStatus, { color: realTimeStatus === 'Active' ? colors.success : realTimeStatus === 'Connecting' ? colors.warning : colors.error }]}>
+            📡 Real-time reporting: {realTimeStatus}
           </Text>
         </View>
       </View>
@@ -375,6 +398,22 @@ export default function ReportScreen() {
               </Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={styles.refreshButton}
+                onPress={() => manualTest()}
+              >
+                <Text style={{ fontSize: 10, color: colors.primary }}>WS TEST</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.refreshButton}
+                onPress={() => {
+                  console.log('🔄 Force reconnecting WebSocket...');
+                  const { busTrackingSocket } = require('@/utils/socket');
+                  busTrackingSocket.forceReconnect();
+                }}
+              >
+                <Text style={{ fontSize: 10, color: colors.primary }}>RECONNECT</Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.refreshButton}
                 onPress={debugAuth}

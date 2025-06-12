@@ -74,6 +74,11 @@ interface WebSocketMessage {
   timestamp?: string;
   // Notification properties
   notification?: WebSocketNotification;
+  // Authentication properties
+  user_id?: string;
+  connection_id?: string;
+  message?: string;
+  server_time?: string;
 }
 
 class BusTrackingSocket {
@@ -301,6 +306,15 @@ class BusTrackingSocket {
 
           case 'pong':
             console.log('🏓 Pong received from server');
+            break;
+
+          case 'authenticated':
+            console.log('🔐 Authentication successful:', {
+              user_id: message.user_id,
+              connection_id: message.connection_id,
+              message: message.message
+            });
+            // Authentication is successful, connection is ready
             break;
 
           case 'notification':

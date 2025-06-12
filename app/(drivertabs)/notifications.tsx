@@ -44,6 +44,19 @@ export default function NotificationsScreen() {
     autoRefreshNotifications: true
   });
 
+  // Real-time status display
+  const getRealTimeStatus = () => {
+    if (isConnected) return 'Connected';
+    if (connectionStatus === 'connecting') return 'Connecting';
+    return 'Disconnected';
+  };
+
+  const getRealTimeColor = () => {
+    if (isConnected) return colors.success;
+    if (connectionStatus === 'connecting') return colors.warning;
+    return colors.error;
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchNotifications();
@@ -67,8 +80,8 @@ export default function NotificationsScreen() {
           <Text style={styles.subtitle}>
             {unreadNotificationsCount > 0 ? `${unreadNotificationsCount} unread notifications` : 'All notifications read'}
           </Text>
-          <Text style={[styles.connectionStatus, { color: isConnected ? colors.success : colors.warning }]}>
-            📡 Real-time: {isConnected ? 'Connected' : connectionStatus}
+          <Text style={[styles.connectionStatus, { color: getRealTimeColor() }]}>
+            📡 Real-time: {getRealTimeStatus()}
           </Text>
         </View>
         <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>

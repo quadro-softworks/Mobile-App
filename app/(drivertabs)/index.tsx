@@ -30,44 +30,40 @@ export default function DriverMapScreen() {
   const [initialLocation] = useState({ lat: 9.0301, lng: 38.7578 }); // Static initial location for map
   const [locationSubscription, setLocationSubscription] = useState<any>(null);
   const [isMapFullScreen, setMapFullScreen] = useState(false);
-  const [websocket, setWebsocket] = useState<WebSocket | null>(null);
   const [isNavigatingToLocation, setIsNavigatingToLocation] = useState(false);
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
   const locationUpdateInterval = useRef<NodeJS.Timeout | null>(null);
   const currentLocationRef = useRef({ lat: 9.0301, lng: 38.7578 }); // Use ref to avoid re-renders
 
   // Mock bus ID - in a real app, this would come from the driver's profile/assignment
   const assignedBusId = "64ebb1d5-24c1-4d86-9768-89f9f64707ed";
 
-  // WebSocket connection setup
+  // Monitor shared WebSocket connection status
   useEffect(() => {
-    if (isOnDuty && token) {
-      const ws = new WebSocket(`wss://guzosync-fastapi.onrender.com/ws/connect?token=${encodeURIComponent(token)}`);
+    const updateConnectionStatus = () => {
+      setIsSocketConnected(busTrackingSocket.isConnected());
+    };
 
-      ws.onopen = () => {
-        console.log('🔗 WebSocket connected for driver location updates');
-        setWebsocket(ws);
-      };
+    // Check initial status
+    updateConnectionStatus();
 
-      ws.onerror = (error) => {
-        console.error('🚨 WebSocket connection error:', error);
-      };
+    // Subscribe to connection events
+    const unsubscribeConnect = busTrackingSocket.on('connect', updateConnectionStatus);
+    const unsubscribeDisconnect = busTrackingSocket.on('disconnect', updateConnectionStatus);
 
-      ws.onclose = () => {
-        console.log('❌ WebSocket connection closed');
-        setWebsocket(null);
-      };
+    // Check status periodically (in case events are missed)
+    const statusInterval = setInterval(updateConnectionStatus, 2000);
 
-      return () => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close();
-        }
-      };
-    }
-  }, [isOnDuty, token]);
+    return () => {
+      unsubscribeConnect();
+      unsubscribeDisconnect();
+      clearInterval(statusInterval);
+    };
+  }, []);
 
-  // Send location updates every 5 seconds when on duty
+  // Send location updates every 5 seconds when on duty using shared WebSocket
   useEffect(() => {
-    if (isOnDuty && websocket && websocket.readyState === WebSocket.OPEN) {
+    if (isOnDuty && isSocketConnected) {
       const sendLocationUpdate = async () => {
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
@@ -77,19 +73,19 @@ export default function DriverMapScreen() {
             accuracy: Location.Accuracy.High,
           });
 
-          const locationData = {
-            type: "bus_location_update",
-            data: {
-              bus_id: assignedBusId,
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-              heading: location.coords.heading || 0,
-              speed: location.coords.speed ? location.coords.speed * 3.6 : 0, // Convert m/s to km/h
-            }
-          };
+          // Use the shared WebSocket's sendDriverLocation method
+          busTrackingSocket.sendDriverLocation(assignedBusId, {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            heading: location.coords.heading || 0,
+            speed: location.coords.speed ? location.coords.speed * 3.6 : 0, // Convert m/s to km/h
+            timestamp: new Date().toISOString(),
+            status: 'on-time',
+            nextStop: 'Unknown',
+            eta: 0
+          });
 
-          websocket.send(JSON.stringify(locationData));
-          console.log('📍 Sent location update:', locationData);
+          console.log('📍 Sent location update via shared WebSocket');
         } catch (error) {
           console.error('❌ Error sending location update:', error);
         }
@@ -108,7 +104,7 @@ export default function DriverMapScreen() {
         }
       };
     }
-  }, [isOnDuty, websocket, assignedBusId]);
+  }, [isOnDuty, isSocketConnected, assignedBusId]);
 
   // Fetch bus stops from API on component mount
   useEffect(() => {
@@ -119,14 +115,11 @@ export default function DriverMapScreen() {
   // Cleanup on component unmount
   useEffect(() => {
     return () => {
-      if (websocket) {
-        websocket.close();
-      }
       if (locationUpdateInterval.current) {
         clearInterval(locationUpdateInterval.current);
       }
     };
-  }, [websocket]);
+  }, []);
 
   // Transform API bus stops for map display with null checks
   const busStopsForMap = stops
@@ -405,12 +398,7 @@ export default function DriverMapScreen() {
     } else {
       Alert.alert('Off Duty', 'You are now off duty. Location sharing has stopped.');
 
-      // Clean up WebSocket connection and location updates
-      if (websocket) {
-        websocket.close();
-        setWebsocket(null);
-      }
-
+      // Clean up location updates (WebSocket stays connected for other features)
       if (locationUpdateInterval.current) {
         clearInterval(locationUpdateInterval.current);
         locationUpdateInterval.current = null;
@@ -475,8 +463,8 @@ export default function DriverMapScreen() {
             Bus stops: {busStopsForMap.length} | Bus ID: {assignedBusId.slice(-8)}
           </Text>
           {isOnDuty && (
-            <Text style={{ fontSize: 11, color: websocket ? colors.success : colors.warning, marginTop: 2 }}>
-              📍 Location updates: {websocket ? 'Active (every 5s)' : 'Connecting...'}
+            <Text style={{ fontSize: 11, color: isSocketConnected ? colors.success : colors.warning, marginTop: 2 }}>
+              📍 Location updates: {isSocketConnected ? 'Active (every 5s)' : 'Connecting...'}
             </Text>
           )}
           {isNavigatingToLocation && (
