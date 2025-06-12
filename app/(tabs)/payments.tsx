@@ -12,7 +12,8 @@ import {
   Modal,
   ActivityIndicator,
   Linking,
-  TextInput
+  TextInput,
+  Image
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
@@ -24,40 +25,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
 import { Route } from '@/types';
 
-// Simple QR Code Component with value-based pattern
+// QR Code Component using QR Server API for dynamic QR code generation
 const QRCodeComponent: React.FC<{ value: string; size?: number }> = ({ value, size = 200 }) => {
-  // Generate consistent pattern based on value
-  const generatePattern = (value: string) => {
-    const hash = value.split('').reduce((a, b) => {
-      a = ((a << 5) - a) + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-
-    return Array.from({ length: 25 }, (_, i) => {
-      const seed = Math.abs(hash + i);
-      return {
-        visible: (seed % 4) !== 0,
-        opacity: (seed % 3) === 0 ? 0.3 : 1
-      };
-    });
-  };
-
-  const pattern = generatePattern(value);
+  // Generate QR code URL using QR Server API with optimal settings
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(value)}&ecc=M&margin=0&qzone=4&format=png&color=000000&bgcolor=ffffff`;
 
   return (
-    <View style={[styles.qrCodePlaceholder, { width: size, height: size }]}>
-      <View style={styles.qrPattern}>
-        {pattern.map((dot, i) => (
-          <View key={i} style={[
-            styles.qrDot,
-            {
-              backgroundColor: dot.visible ? colors.text : 'transparent',
-              opacity: dot.opacity
-            }
-          ]} />
-        ))}
-      </View>
-      <Text style={styles.qrCodeText}>QR CODE</Text>
+    <View style={[styles.qrCodeContainer, { width: size, height: size }]}>
+      <Image
+        source={{ uri: qrCodeUrl }}
+        style={{
+          width: size,
+          height: size,
+          resizeMode: 'contain'
+        }}
+        onError={(error) => {
+          console.warn('QR Code loading error:', error);
+        }}
+      />
     </View>
   );
 };
@@ -369,30 +354,7 @@ export default function PaymentsScreen() {
             </View>
           </Card>
           
-          <Card style={styles.ticketDetailsCard}>
-            <Text style={styles.ticketDetailsTitle}>Ticket Details</Text>
-            <View style={styles.ticketDetailRow}>
-              <Text style={styles.ticketDetailLabel}>Price:</Text>
-              <Text style={styles.ticketDetailValue}>${selectedTicket.price.toFixed(2)}</Text>
-            </View>
-            <View style={styles.ticketDetailRow}>
-              <Text style={styles.ticketDetailLabel}>Purchase Date:</Text>
-              <Text style={styles.ticketDetailValue}>{formatDate(selectedTicket.purchaseDate)}</Text>
-            </View>
-            <View style={styles.ticketDetailRow}>
-              <Text style={styles.ticketDetailLabel}>Valid Until:</Text>
-              <Text style={styles.ticketDetailValue}>{formatDate(selectedTicket.expiryDate)}</Text>
-            </View>
-            <View style={styles.ticketDetailRow}>
-              <Text style={styles.ticketDetailLabel}>Status:</Text>
-              <Text style={[
-                styles.ticketDetailValue, 
-                { color: selectedTicket.isUsed ? colors.error : colors.success }
-              ]}>
-                {selectedTicket.isUsed ? 'Used' : 'Active'}
-              </Text>
-            </View>
-          </Card>
+          
           
           <Text style={styles.qrInstructions}>
             Show this QR code to the bus driver or scan at the terminal
@@ -538,7 +500,6 @@ export default function PaymentsScreen() {
 
           {/* Origin Input */}
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>{t('payments.from')}</Text>
             <View style={styles.autocompleteContainer}>
               <View style={styles.textInputWrapper}>
                 <Ionicons name="location" size={20} color={colors.primary} style={styles.inputIcon} />
@@ -569,7 +530,6 @@ export default function PaymentsScreen() {
 
           {/* Destination Input */}
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>{t('payments.to')}</Text>
             <View style={styles.autocompleteContainer}>
               <View style={styles.textInputWrapper}>
                 <Ionicons name="flag" size={20} color={colors.primary} style={styles.inputIcon} />
@@ -681,21 +641,7 @@ export default function PaymentsScreen() {
           )}
         </View>
         
-        {/* Payment methods section removed - now integrated into route selection */}
         
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Purchase History</Text>
-          <Pressable 
-            style={({ pressed }) => [
-              styles.viewHistoryButton,
-              pressed ? styles.viewHistoryButtonPressed : {}
-            ]}
-            onPress={() => router.push('/purchase-history')}
-          >
-            <Text style={styles.viewHistoryText}>View Purchase History</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.primary} />
-          </Pressable>
-        </View>
       </ScrollView>
     </SafeAreaView>
     </>
@@ -755,7 +701,7 @@ const styles = StyleSheet.create({
   },
   ticketCard: {
     backgroundColor: colors.card,
-    borderRadius: 16,
+    borderRadius: 5,
     padding: 16,
     marginBottom: 12,
     shadowColor: colors.text,
@@ -885,7 +831,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.highlight,
     paddingVertical: 4,
     paddingHorizontal: 8,
-    borderRadius: 12,
+    borderRadius: 5,
   },
   defaultBadgeText: {
     fontSize: 12,
@@ -918,7 +864,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.card,
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 5,
     marginTop: 8,
   },
   managePaymentsButtonPressed: {
@@ -1002,8 +948,8 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   qrCodeContainer: {
-    padding: 24,
     alignItems: 'center',
+    paddingVertical:10,
   },
   qrCodeHeader: {
     alignItems: 'center',
@@ -1032,15 +978,16 @@ const styles = StyleSheet.create({
   qrCodeId: {
     fontSize: 14,
     color: colors.textSecondary,
+    paddingHorizontal:20
   },
   ticketDetailsCard: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   ticketDetailsTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 16,
+    marginBottom: 0,
   },
   ticketDetailRow: {
     flexDirection: 'row',
@@ -1090,36 +1037,7 @@ const styles = StyleSheet.create({
   purchaseButton: {
     marginBottom: 12,
   },
-  // QR Code Component Styles
-  qrCodePlaceholder: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  qrPattern: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    width: '80%',
-    height: '80%',
-    justifyContent: 'space-between',
-    alignContent: 'space-between',
-  },
-  qrDot: {
-    width: '18%',
-    height: '18%',
-    borderRadius: 2,
-  },
-  qrCodeText: {
-    position: 'absolute',
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: colors.textSecondary,
-    bottom: 4,
-  },
+  // QR Code Component Styles removed - using existing qrCodeContainer style
   // Payment Modal Styles
   modalContainer: {
     flex: 1,
@@ -1339,7 +1257,7 @@ const styles = StyleSheet.create({
   },
   // Origin/Destination Input Styles
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 5,
   },
   inputLabel: {
     fontSize: 16,
@@ -1354,7 +1272,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
-    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: 16,
@@ -1367,6 +1284,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: colors.text,
+    width:100,
+    height:40
   },
   suggestionsContainer: {
     position: 'absolute',
