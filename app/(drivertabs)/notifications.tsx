@@ -15,6 +15,8 @@ import { NotificationItem } from '@/components/NotificationItem';
 import { Notification } from '@/types';
 import { FloatingActionButton } from '@/components/FloatingActionButton';
 import { ChatModal } from '@/components/ChatModal';
+import { useWebSocketNotifications } from '@/hooks/useWebSocketNotifications';
+import { WebSocketNotification } from '@/utils/socket';
 
 export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
@@ -24,6 +26,23 @@ export default function NotificationsScreen() {
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  // WebSocket notifications
+  const { isConnected, connectionStatus, sendChatMessage, sendIncidentReport } = useWebSocketNotifications({
+    onNotificationReceived: (notification: WebSocketNotification) => {
+      console.log('🔔 Driver received notification:', notification.title);
+      // Could show a toast notification here if desired
+    },
+    onChatMessageReceived: (message: WebSocketNotification) => {
+      console.log('💬 Driver received chat message:', message.title);
+      // Could show a chat notification here if desired
+    },
+    onIncidentReported: (incident: WebSocketNotification) => {
+      console.log('🚨 Driver received incident report:', incident.title);
+      // Could show an incident alert here if desired
+    },
+    autoRefreshNotifications: true
+  });
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -47,6 +66,9 @@ export default function NotificationsScreen() {
           <Text style={styles.title}>Notifications</Text>
           <Text style={styles.subtitle}>
             {unreadNotificationsCount > 0 ? `${unreadNotificationsCount} unread notifications` : 'All notifications read'}
+          </Text>
+          <Text style={[styles.connectionStatus, { color: isConnected ? colors.success : colors.warning }]}>
+            📡 Real-time: {isConnected ? 'Connected' : connectionStatus}
           </Text>
         </View>
         <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
@@ -143,5 +165,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  connectionStatus: {
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: '500',
   },
 });
