@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,65 +10,151 @@ import {
   Alert,
   Modal,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
+import * as Location from 'expo-location';
 
-interface Request {
-  id: string;
-  type: 'overcrowding';
-  title: string;
+// API Types based on the endpoint schema
+type IncidentType = 'VEHICLE_ISSUE' | 'ROUTE_DISRUPTION' | 'PASSENGER_INCIDENT' | 'INFRASTRUCTURE_ISSUE' | 'OVERCROWDING' | 'SAFETY_CONCERN';
+type SeverityLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+interface Location {
+  latitude: number;
+  longitude: number;
+}
+
+interface IssueReport {
   description: string;
-  status: 'pending' | 'accepted' | 'denied';
-  timestamp: string;
-  response?: string;
+  incident_type: IncidentType;
+  location: Location;
+  related_bus_id?: string;
+  related_route_id?: string;
+  severity: SeverityLevel;
+}
+
+interface IssueResponse {
+  created_at: string;
+  updated_at: string;
+  id: string;
+  reported_by_user_id: string;
+  description: string;
+  incident_type: IncidentType;
+  location: Location;
+  related_bus_id?: string;
+  related_route_id?: string;
+  is_resolved: boolean;
+  resolution_notes?: string;
+  severity: SeverityLevel;
 }
 
 interface RequestType {
-  id: string;
+  id: IncidentType;
   title: string;
   description: string;
   icon: string;
   color: string;
+  severity: SeverityLevel;
 }
 
 export default function RequestsScreen() {
-  const { user } = useAuthStore();
+  const { user, token } = useAuthStore();
   const { t } = useTranslation();
 
-  const [requests, setRequests] = useState<Request[]>([]);
+  const [requests, setRequests] = useState<IssueResponse[]>([]);
   const [selectedRequestType, setSelectedRequestType] = useState<RequestType | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [requestDescription, setRequestDescription] = useState('');
   const [passengerCount, setPassengerCount] = useState('');
+  const [busId, setBusId] = useState('');
+  const [routeId, setRouteId] = useState('');
+  const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
   const requestTypes: RequestType[] = [
     {
-      id: 'overcrowding',
+      id: 'OVERCROWDING',
       title: 'Report Overcrowding',
       description: 'Report passenger overcrowding at your stop',
       icon: 'people',
       color: colors.warning,
+      severity: 'MEDIUM',
+    },
+    {
+      id: 'VEHICLE_ISSUE',
+      title: 'Vehicle Problem',
+      description: 'Report bus mechanical issues or breakdowns',
+      icon: 'bus',
+      color: colors.error,
+      severity: 'HIGH',
+    },
+    {
+      id: 'ROUTE_DISRUPTION',
+      title: 'Route Disruption',
+      description: 'Report road closures or route changes',
+      icon: 'warning',
+      color: colors.warning,
+      severity: 'MEDIUM',
+    },
+    {
+      id: 'SAFETY_CONCERN',
+      title: 'Safety Issue',
+      description: 'Report safety concerns or incidents',
+      icon: 'shield',
+      color: colors.error,
+      severity: 'HIGH',
+    },
+    {
+      id: 'INFRASTRUCTURE_ISSUE',
+      title: 'Infrastructure Problem',
+      description: 'Report bus stop or infrastructure issues',
+      icon: 'construct',
+      color: colors.warning,
+      severity: 'MEDIUM',
+    },
+    {
+      id: 'PASSENGER_INCIDENT',
+      title: 'Passenger Incident',
+      description: 'Report passenger-related incidents',
+      icon: 'person',
+      color: colors.error,
+      severity: 'HIGH',
     },
   ];
 
-  // Mock requests data for demonstration
-  React.useEffect(() => {
-    const mockRequests: Request[] = [
-      {
-        id: '1',
-        type: 'overcrowding',
-        title: 'Overcrowding Report',
-        description: 'Heavy passenger queue at Stadium stop - approximately 40 waiting passengers',
-        status: 'accepted',
-        timestamp: '2024-01-15T09:15:00Z',
-        response: 'Additional bus dispatched to your location. ETA: 5 minutes.',
-      },
-    ];
-    setRequests(mockRequests);
+  // Get current location on component mount
+  useEffect(() => {
+    getCurrentLocation();
   }, []);
+
+  const getCurrentLocation = async () => {
+    try {
+      setIsLoadingLocation(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Location permission is required to report issues.');
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      setCurrentLocation({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+    } catch (error) {
+      console.error('Error getting location:', error);
+      Alert.alert('Error', 'Failed to get your location. Please try again.');
+    } finally {
+      setIsLoadingLocation(false);
+    }
+  };
 
   const handleRequestTypeSelect = (requestType: RequestType) => {
     setSelectedRequestType(requestType);
@@ -81,49 +167,146 @@ export default function RequestsScreen() {
       return;
     }
 
+    if (!currentLocation) {
+      Alert.alert('Error', 'Location is required. Please enable location services.');
+      return;
+    }
+
     // Require passengerCount for overcrowding
-    if (selectedRequestType.id === 'overcrowding' && !passengerCount.trim()) {
+    if (selectedRequestType.id === 'OVERCROWDING' && !passengerCount.trim()) {
       Alert.alert('Error', 'Estimated Passenger Count is required');
       return;
     }
 
-    try {
-      let description = requestDescription.trim();
+    if (!token) {
+      Alert.alert('Error', 'Authentication required. Please log in again.');
+      return;
+    }
 
-      // Add specific fields based on request type
-      if (selectedRequestType.id === 'overcrowding') {
-        description = `Estimated passengers: ${passengerCount}. ${description}`;
+    try {
+      setIsSubmitting(true);
+
+      // Always use 'VEHICLE_ISSUE' for API submission
+      const apiIncidentType: IncidentType = 'VEHICLE_ISSUE';
+      let description = requestDescription.trim();
+      // Add original type to description for context
+      if (selectedRequestType && selectedRequestType.id !== 'VEHICLE_ISSUE') {
+        description = `[${selectedRequestType.title}] ${description}`;
       }
 
-      const newRequest: Request = {
-        id: Date.now().toString(),
-        type: selectedRequestType.id as any,
-        title: selectedRequestType.title,
-        description: description,
-        status: 'pending',
-        timestamp: new Date().toISOString(),
+      const issueReport: IssueReport = {
+        description,
+        incident_type: apiIncidentType,
+        location: currentLocation,
+        severity: selectedRequestType.severity,
+        ...(busId.trim() && { related_bus_id: busId.trim() }),
+        ...(routeId.trim() && { related_route_id: routeId.trim() }),
       };
 
-      setRequests(prev => [newRequest, ...prev]);
+      console.log('Submitting issue report:', JSON.stringify(issueReport, null, 2));
+      console.log('Auth token present:', !!token);
+      console.log('Auth token length:', token?.length);
+
+      // Validate the payload
+      if (!issueReport.description || issueReport.description.length < 10) {
+        throw new Error('Description must be at least 10 characters long');
+      }
+
+      if (!issueReport.location || typeof issueReport.location.latitude !== 'number' || typeof issueReport.location.longitude !== 'number') {
+        throw new Error('Valid location is required');
+      }
+
+      if (!['VEHICLE_ISSUE', 'ROUTE_DISRUPTION', 'PASSENGER_INCIDENT', 'INFRASTRUCTURE_ISSUE', 'OVERCROWDING', 'SAFETY_CONCERN'].includes(issueReport.incident_type)) {
+        throw new Error('Invalid incident type');
+      }
+
+      if (!['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(issueReport.severity)) {
+        throw new Error('Invalid severity level');
+      }
+
+      const response = await fetch('https://guzosync-fastapi.onrender.com/api/issues/report', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(issueReport),
+      });
+
+      console.log('API Response status:', response.status);
+      console.log('API Response headers:', response.headers);
+
+      if (!response.ok) {
+        if (response.status === 422) {
+          const errorData = await response.json();
+          console.log('Validation Error response:', errorData);
+
+          if (errorData.detail && Array.isArray(errorData.detail)) {
+            const validationErrors = errorData.detail
+              .map((err: any) => `${err.loc?.join('.')} - ${err.msg}`)
+              .join(', ');
+            throw new Error(`Validation Error: ${validationErrors}`);
+          }
+        }
+
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const newIssue: IssueResponse = await response.json();
+      console.log('Issue submitted successfully:', newIssue);
+
+      // Add to local state
+      setRequests(prev => [newIssue, ...prev]);
 
       // Reset form
       setSelectedRequestType(null);
       setRequestDescription('');
       setPassengerCount('');
+      setBusId('');
+      setRouteId('');
       setIsModalVisible(false);
 
-      Alert.alert('Success', 'Request submitted successfully');
+      Alert.alert('Success', 'Issue reported successfully. You will be notified when it is resolved.');
     } catch (error) {
       console.error('Error submitting request:', error);
-      Alert.alert('Error', 'Failed to submit request');
+      console.error('Error type:', typeof error);
+      console.error('Error constructor:', error?.constructor?.name);
+
+      let errorMessage = 'Failed to submit report';
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && typeof error === 'object') {
+        try {
+          errorMessage = JSON.stringify(error);
+        } catch {
+          errorMessage = 'Unknown error occurred';
+        }
+      }
+
+      console.error('Final error message:', errorMessage);
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return colors.warning;
-      case 'accepted': return colors.success;
-      case 'denied': return colors.error;
+  const getStatusColor = (isResolved: boolean) => {
+    return isResolved ? colors.success : colors.warning;
+  };
+
+  const getStatusText = (isResolved: boolean) => {
+    return isResolved ? 'RESOLVED' : 'PENDING';
+  };
+
+  const getSeverityColor = (severity: SeverityLevel) => {
+    switch (severity) {
+      case 'LOW': return colors.success;
+      case 'MEDIUM': return colors.warning;
+      case 'HIGH': return colors.error;
+      case 'CRITICAL': return '#8B0000'; // Dark red
       default: return colors.textSecondary;
     }
   };
@@ -131,6 +314,11 @@ export default function RequestsScreen() {
   const formatDate = (timestamp: string) => {
     const date = new Date(timestamp);
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const getIncidentTypeTitle = (incidentType: IncidentType) => {
+    const type = requestTypes.find(t => t.id === incidentType);
+    return type?.title || incidentType.replace('_', ' ');
   };
 
   const renderRequestType = (requestType: RequestType) => (
@@ -150,30 +338,87 @@ export default function RequestsScreen() {
     </TouchableOpacity>
   );
 
-  const renderRequest = ({ item }: { item: Request }) => (
+  const renderRequest = ({ item }: { item: IssueResponse }) => (
     <View style={styles.requestCard}>
       <View style={styles.requestHeader}>
-        <Text style={styles.requestTitle}>{item.title}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.requestTitle}>{getIncidentTypeTitle(item.incident_type)}</Text>
+          <View style={styles.severityContainer}>
+            <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(item.severity) }]}>
+              <Text style={styles.severityText}>{item.severity}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.is_resolved) }]}>
+          <Text style={styles.statusText}>{getStatusText(item.is_resolved)}</Text>
         </View>
       </View>
       <Text style={styles.requestDescription}>{item.description}</Text>
-      {item.response && (
-        <View style={styles.responseContainer}>
-          <Text style={styles.responseLabel}>Response:</Text>
-          <Text style={styles.responseText}>{item.response}</Text>
+
+      {/* Location info */}
+      <View style={styles.locationContainer}>
+        <Ionicons name="location" size={14} color={colors.textSecondary} />
+        <Text style={styles.locationText}>
+          {item.location.latitude.toFixed(6)}, {item.location.longitude.toFixed(6)}
+        </Text>
+      </View>
+
+      {/* Related bus/route info */}
+      {(item.related_bus_id || item.related_route_id) && (
+        <View style={styles.relatedInfoContainer}>
+          {item.related_bus_id && (
+            <View style={styles.relatedInfo}>
+              <Ionicons name="bus" size={14} color={colors.textSecondary} />
+              <Text style={styles.relatedInfoText}>Bus: {item.related_bus_id}</Text>
+            </View>
+          )}
+          {item.related_route_id && (
+            <View style={styles.relatedInfo}>
+              <Ionicons name="map" size={14} color={colors.textSecondary} />
+              <Text style={styles.relatedInfoText}>Route: {item.related_route_id}</Text>
+            </View>
+          )}
         </View>
       )}
-      <Text style={styles.requestTimestamp}>{formatDate(item.timestamp)}</Text>
+
+      {/* Resolution notes */}
+      {item.resolution_notes && (
+        <View style={styles.responseContainer}>
+          <Text style={styles.responseLabel}>Resolution:</Text>
+          <Text style={styles.responseText}>{item.resolution_notes}</Text>
+        </View>
+      )}
+
+      <View style={styles.timestampContainer}>
+        <Text style={styles.requestTimestamp}>
+          Reported: {formatDate(item.created_at)}
+        </Text>
+        {item.updated_at !== item.created_at && (
+          <Text style={styles.requestTimestamp}>
+            Updated: {formatDate(item.updated_at)}
+          </Text>
+        )}
+      </View>
     </View>
   );
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>{t('regulator.requests')}</Text>
-        <Text style={styles.subtitle}>Control Center Communication</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>{t('regulator.requests')}</Text>
+          <Text style={styles.subtitle}>Control Center Communication</Text>
+        </View>
+
+        {/* Debug info */}
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={{ fontSize: 10, color: colors.textSecondary }}>
+            Auth: {token ? '✓' : '✗'}
+          </Text>
+          <Text style={{ fontSize: 10, color: colors.textSecondary }}>
+            Location: {currentLocation ? '✓' : '✗'}
+          </Text>
+        </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -241,7 +486,7 @@ export default function RequestsScreen() {
             )}
 
             {/* Overcrowding specific fields */}
-            {selectedRequestType?.id === 'overcrowding' && (
+            {selectedRequestType?.id === 'OVERCROWDING' && (
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Estimated Passenger Count *</Text>
                 <TextInput
@@ -255,6 +500,32 @@ export default function RequestsScreen() {
                 />
               </View>
             )}
+
+            {/* Optional Bus ID field */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Related Bus ID (Optional)</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="e.g., BUS001"
+                placeholderTextColor={colors.textSecondary + '80'}
+                value={busId}
+                onChangeText={setBusId}
+                maxLength={20}
+              />
+            </View>
+
+            {/* Optional Route ID field */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Related Route ID (Optional)</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="e.g., ROUTE001"
+                placeholderTextColor={colors.textSecondary + '80'}
+                value={routeId}
+                onChangeText={setRouteId}
+                maxLength={20}
+              />
+            </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Description *</Text>
@@ -271,22 +542,56 @@ export default function RequestsScreen() {
               <Text style={styles.characterCount}>{requestDescription.length}/500</Text>
             </View>
 
+            {/* Location status */}
+            <View style={styles.infoContainer}>
+              <Ionicons
+                name={currentLocation ? "location" : "location-outline"}
+                size={20}
+                color={currentLocation ? colors.success : colors.warning}
+              />
+              <Text style={styles.infoText}>
+                {currentLocation
+                  ? `Location: ${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`
+                  : isLoadingLocation
+                    ? 'Getting your location...'
+                    : 'Location required - tap to retry'
+                }
+              </Text>
+              {!currentLocation && !isLoadingLocation && (
+                <TouchableOpacity onPress={getCurrentLocation} style={styles.retryButton}>
+                  <Text style={styles.retryButtonText}>Retry</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             <View style={styles.infoContainer}>
               <Ionicons name="information-circle" size={20} color={colors.primary} />
               <Text style={styles.infoText}>
-                Your request will be sent to the control center for review and response.
+                Your report will be sent to the control center for review and response.
               </Text>
             </View>
           </ScrollView>
 
           {/* Fixed Submit Button */}
           <View style={styles.fixedSubmitButton}>
-            <TouchableOpacity 
-              style={[styles.submitButton, { opacity: requestDescription.trim() ? 1 : 0.6 }]} 
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                {
+                  opacity: (requestDescription.trim() && currentLocation && !isSubmitting) ? 1 : 0.6
+                }
+              ]}
               onPress={submitRequest}
-              disabled={!requestDescription.trim()}
+              disabled={!requestDescription.trim() || !currentLocation || isSubmitting}
             >
-              <Text style={styles.submitButtonText}>Submit Request</Text>
+              {isSubmitting ? (
+                <View style={styles.submitButtonContent}>
+                  <ActivityIndicator size="small" color="white" />
+                  <Text style={[styles.submitButtonText, { marginLeft: 8 }]}>Submitting...</Text>
+                </View>
+              ) : (
+                <Text style={styles.submitButtonText}>Submit Report</Text>
+              )}
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -583,5 +888,67 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 21,
   },
-
+  // New styles for the updated UI
+  severityContainer: {
+    marginTop: 4,
+  },
+  severityBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  severityText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: colors.card,
+  },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  locationText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginLeft: 4,
+  },
+  relatedInfoContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  relatedInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+    marginBottom: 4,
+  },
+  relatedInfoText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginLeft: 4,
+  },
+  timestampContainer: {
+    marginTop: 8,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  submitButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

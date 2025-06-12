@@ -1,194 +1,335 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  SafeAreaView,
-  Alert,
-  Switch,
-} from 'react-native';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
+import { View, StyleSheet, Text, Platform, SafeAreaView, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import { useTranslation } from '@/i18n';
-import { colors } from '@/constants/colors';
-import { useAuthStore } from '@/stores/authStore';
+// import { useRouter } from 'expo-router'; // Removed unused import
 import { useBusStore } from '@/stores/busStore';
+import { useRealTimeBuses } from '@/hooks/useRealTimeBuses';
+// import { RealTimeBusStatus } from '@/components/RealTimeBusStatus'; // Removed - not used
+import { colors } from '@/constants/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '@/i18n';
+import { Bus } from '@/types';
+import * as Location from 'expo-location';
 
-export default function RegulatorMapScreen() {
-  const { user } = useAuthStore();
-  const { stops, fetchBusStops } = useBusStore();
+
+export default function MapScreen() {
+  const { fetchBuses, stops, fetchBusStops } = useBusStore();
+  const {
+    buses: realTimeBuses,
+    isConnected: isRealTimeConnected,
+    connectionStatus,
+    isUsingFallback,
+    joinAreaTracking
+  } = useRealTimeBuses();
   const { t } = useTranslation();
-  const [isOnDuty, setIsOnDuty] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState({ lat: 9.0301, lng: 38.7578 });
-  const [locationSubscription, setLocationSubscription] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isMapFullScreen, setMapFullScreen] = useState(false);
-  const [webViewRef, setWebViewRef] = useState<WebView | null>(null);
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [locationPermission, setLocationPermission] = useState<boolean>(false);
+  const webViewRef = useRef<WebView>(null);
+  const [mapInitialized, setMapInitialized] = useState(false);
+  const [lastBusUpdate, setLastBusUpdate] = useState(0);
+  const [selectedBusForDirections, setSelectedBusForDirections] = useState<Bus | null>(null);
+  const [showDirections, setShowDirections] = useState(false);
 
-  console.log('🚌 RegulatorMapScreen loaded - User:', user ? { role: user.role, email: user.email } : 'No user');
-  console.log('🚌 RegulatorMapScreen - Bus stops count:', stops.length);
+  // Memoize bus stops data to prevent unnecessary re-renders
+  const busStopsForMap = useMemo(() => {
+    return stops
+      .filter(stop => {
+        // Filter out stops without valid location data
+        const hasLocation = stop.location &&
+          typeof stop.location.longitude === 'number' &&
+          typeof stop.location.latitude === 'number';
 
-  // Fetch bus stops from API on component mount
+        const hasCoordinates = stop.coordinates &&
+          typeof stop.coordinates.longitude === 'number' &&
+          typeof stop.coordinates.latitude === 'number';
+
+        if (!hasLocation && !hasCoordinates) {
+          return false;
+        }
+
+        return true;
+      })
+      .map(stop => {
+        // Use location first, fallback to coordinates
+        const location = stop.location || stop.coordinates;
+
+        return {
+          id: stop.id,
+          name: stop.name,
+          coordinates: {
+            lng: location.longitude,
+            lat: location.latitude
+          },
+          properties: {
+            capacity: stop.capacity,
+            is_active: stop.is_active,
+            created_at: stop.created_at,
+            updated_at: stop.updated_at
+          }
+        };
+      });
+  }, [stops]);
+
+  // Memoize bus data to prevent unnecessary re-renders - ONLY LIVE TRACKING BUSES
+  const busesForMap = useMemo(() => {
+    return realTimeBuses
+      .filter(bus => {
+        // Filter out buses without valid coordinates AND only show live tracking buses
+        const hasValidCoordinates = bus.coordinates &&
+          typeof bus.coordinates.longitude === 'number' &&
+          typeof bus.coordinates.latitude === 'number';
+
+        const isLiveTracking = (bus as any).isRealTime === true;
+
+        return hasValidCoordinates && isLiveTracking;
+      })
+      .map(bus => ({
+        id: bus.id,
+        name: bus.name,
+        routeName: bus.routeName,
+        coordinates: {
+          lng: bus.coordinates.longitude,
+          lat: bus.coordinates.latitude
+        },
+        status: bus.status,
+        capacity: bus.capacity,
+        nextStop: bus.nextStop,
+        eta: bus.eta,
+        heading: (bus as any).heading || 0,
+        speed: (bus as any).speed || 0,
+        isRealTime: true, // All buses in this array are live tracking
+        lastUpdated: bus.lastUpdated
+      }));
+  }, [realTimeBuses]);
+
+  // Debug logging (reduced frequency) - only log when significant changes occur
   useEffect(() => {
+    // Only log when bus stops count changes significantly or connection status changes
+    const shouldLog = stops.length > 0 && (stops.length % 500 === 0 || stops.length === busStopsForMap.length);
+    if (shouldLog || connectionStatus === 'connected') {
+      console.log('📊 Map Data Summary:');
+      console.log('  - Bus stops:', stops.length, '| Displaying:', busStopsForMap.length);
+      console.log('  - Real-time buses:', realTimeBuses.length, '| Displaying:', busesForMap.length);
+      console.log('  - Connection status:', connectionStatus, '| Connected:', isRealTimeConnected);
+      if (stops.length > 100) {
+        console.log('  ✅ Successfully loaded ALL bus stops');
+      }
+    }
+  }, [stops.length, connectionStatus]); // Removed frequently changing dependencies
+  
+  // Request location permission and get user location
+  useEffect(() => {
+    const requestLocationPermission = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          setLocationPermission(true);
+          const location = await Location.getCurrentPositionAsync({});
+          setUserLocation({
+            lat: location.coords.latitude,
+            lng: location.coords.longitude
+          });
+        } else {
+          setLocationPermission(false);
+          Alert.alert(
+            'Location Permission',
+            'Location permission is required to show your position on the map.',
+            [{ text: 'OK' }]
+          );
+        }
+      } catch (error) {
+        console.error('Error requesting location permission:', error);
+        setLocationPermission(false);
+      }
+    };
+
+    requestLocationPermission();
+  }, []);
+
+  useEffect(() => {
+    fetchBuses();
     // Fetch ALL bus stops (set very high page size to get all)
     fetchBusStops({ ps: 1000 });
-  }, [fetchBusStops]);
+  }, [fetchBuses, fetchBusStops]);
 
-  // Transform API bus stops for map display with null checks
-  const busStopsForMap = stops
-    .filter(stop => {
-      // Filter out stops without valid location data
-      const hasLocation = stop.location &&
-        typeof stop.location.longitude === 'number' &&
-        typeof stop.location.latitude === 'number';
-
-      const hasCoordinates = stop.coordinates &&
-        typeof stop.coordinates.longitude === 'number' &&
-        typeof stop.coordinates.latitude === 'number';
-
-      if (!hasLocation && !hasCoordinates) {
-        console.warn('Skipping bus stop without valid coordinates:', stop.name, stop);
-        return false;
-      }
-
-      return true;
-    })
-    .map(stop => {
-      // Use location first, fallback to coordinates
-      const location = stop.location || stop.coordinates;
-
-      return {
-        id: stop.id,
-        name: stop.name,
-        coordinates: {
-          lng: location.longitude,
-          lat: location.latitude
-        },
-        properties: {
-          capacity: stop.capacity,
-          is_active: stop.is_active,
-          created_at: stop.created_at,
-          updated_at: stop.updated_at
-        }
-      };
-    });
-
-  // Center map on user location
-  const centerOnUserLocation = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Location permission is required to center on your location.');
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
-      const newLocation = {
-        lat: location.coords.latitude,
-        lng: location.coords.longitude,
-      };
-
-      setCurrentLocation(newLocation);
-
-      // Update map center and regulator marker
-      if (webViewRef) {
-        webViewRef.postMessage(JSON.stringify({
-          type: 'centerOnLocation',
-          lat: newLocation.lat,
-          lng: newLocation.lng
-        }));
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to get your location');
-    }
-  };
-
+  // Join area tracking for Addis Ababa region when component mounts
   useEffect(() => {
-    let subscription: any;
-    if (isOnDuty) {
-      (async () => {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permission Denied', 'Location permission is required to show your position on the map.');
-          return;
-        }
-        subscription = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.Highest,
-            timeInterval: 2000,
-            distanceInterval: 1,
-          },
-          (loc) => {
-            const coords = loc.coords;
-            setCurrentLocation({ lat: coords.latitude, lng: coords.longitude });
-            if (webViewRef) {
-              webViewRef.postMessage(
-                JSON.stringify({
-                  type: 'updateLocation',
-                  lat: coords.latitude,
-                  lng: coords.longitude,
-                })
-              );
-            }
-          }
-        );
-        setLocationSubscription(subscription);
-      })();
-    } else if (locationSubscription) {
-      locationSubscription.remove();
-      setLocationSubscription(null);
-    }
-    return () => {
-      if (subscription) subscription.remove();
+    // Define bounds for Addis Ababa area
+    const addisAbabaBounds = {
+      north: 9.1,
+      south: 8.9,
+      east: 38.9,
+      west: 38.6
     };
-  }, [isOnDuty, webViewRef]);
 
-  const toggleDutyStatus = () => {
-    setIsOnDuty(!isOnDuty);
-    if (!isOnDuty) {
-      Alert.alert('On Duty', 'You are now on duty. Your location will be shared.');
-    } else {
-      Alert.alert('Off Duty', 'You are now off duty. Location sharing has stopped.');
+    console.log('🗺️ Joining area tracking for Addis Ababa region');
+    joinAreaTracking(addisAbabaBounds);
+  }, [joinAreaTracking]);
+
+  // Update bus positions without recreating the map (throttled)
+  useEffect(() => {
+    if (mapInitialized && webViewRef.current && busesForMap.length > 0) {
+      const now = Date.now();
+      // Throttle updates to maximum once every 2 seconds
+      if (now - lastBusUpdate > 2000) {
+        const updateScript = `
+          if (window.updateBusPositions) {
+            window.updateBusPositions(${JSON.stringify(busesForMap)});
+          }
+          true; // Return true to prevent console warnings
+        `;
+
+        webViewRef.current.injectJavaScript(updateScript);
+        setLastBusUpdate(now);
+      }
     }
-  };
-
+  }, [busesForMap, mapInitialized, lastBusUpdate]);
+  
+  // Bus search and directions functionality
+  
   const toggleMapFullScreen = () => {
     setMapFullScreen(!isMapFullScreen);
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>{t('regulator.title')}</Text>
-          <Text style={styles.subtitle}>{t('regulator.subtitle')}</Text>
-          <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
-            All bus stops loaded: {stops.length} | Displaying: {busStopsForMap.length}
-          </Text>
-        </View>
-        <View style={styles.dutyToggle}>
-          <Text style={[styles.dutyText, { color: isOnDuty ? colors.success : colors.textSecondary }]}>
-            {isOnDuty ? 'ON DUTY' : 'OFF DUTY'}
-          </Text>
-          <Switch
-            value={isOnDuty}
-            onValueChange={toggleDutyStatus}
-            trackColor={{ false: colors.border, true: colors.success }}
-            thumbColor={colors.card}
-          />
-        </View>
-      </View>
+  const centerOnUserLocation = async () => {
+    if (!locationPermission) {
+      Alert.alert(
+        'Location Permission Required',
+        'Please enable location permission to use this feature.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
 
-      {/* Map View */}
-      <View style={isMapFullScreen ? styles.mapContainerFullScreen : styles.mapContainer}>
-        <WebView
-          source={{
-            html: `<!DOCTYPE html>
+    try {
+      const location = await Location.getCurrentPositionAsync({});
+      const newLocation = {
+        lat: location.coords.latitude,
+        lng: location.coords.longitude
+      };
+      setUserLocation(newLocation);
+
+      // Send message to WebView to center the map on user location
+      if (webViewRef.current && mapInitialized) {
+        const centerScript = `
+          if (window.map) {
+            window.map.flyTo({
+              center: [${newLocation.lng}, ${newLocation.lat}],
+              zoom: 15,
+              duration: 1000
+            });
+          }
+          true;
+        `;
+        webViewRef.current.injectJavaScript(centerScript);
+      }
+    } catch (error) {
+      console.error('Error getting current location:', error);
+      Alert.alert('Error', 'Unable to get your current location.');
+    }
+  };
+
+  const searchBusAndShowDirections = (busName: string) => {
+    // Find bus by name (case insensitive)
+    const foundBus = busesForMap.find(bus =>
+      bus.name.toLowerCase().includes(busName.toLowerCase())
+    );
+
+    if (!foundBus) {
+      Alert.alert('Bus Not Found', `No bus found with name "${busName}"`);
+      return;
+    }
+
+    if (!userLocation) {
+      Alert.alert('Location Required', 'Please enable location permission to get directions.');
+      return;
+    }
+
+    setSelectedBusForDirections(foundBus as any); // Type assertion for map bus format
+    setShowDirections(true);
+
+    // Show directions on map
+    showDirectionsOnMap(userLocation, foundBus.coordinates);
+  };
+
+  const showDirectionsOnMap = (from: {lat: number, lng: number}, to: {lng: number, lat: number}) => {
+    if (webViewRef.current && mapInitialized) {
+      const directionsScript = `
+        if (window.map) {
+          // Remove existing directions layer
+          if (window.map.getLayer('directions')) {
+            window.map.removeLayer('directions');
+            window.map.removeSource('directions');
+          }
+
+          // Add directions route (simple straight line for now)
+          window.map.addSource('directions', {
+            'type': 'geojson',
+            'data': {
+              'type': 'Feature',
+              'properties': {},
+              'geometry': {
+                'type': 'LineString',
+                'coordinates': [
+                  [${from.lng}, ${from.lat}],
+                  [${to.lng}, ${to.lat}]
+                ]
+              }
+            }
+          });
+
+          window.map.addLayer({
+            'id': 'directions',
+            'type': 'line',
+            'source': 'directions',
+            'layout': {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            'paint': {
+              'line-color': '#007AFF',
+              'line-width': 4,
+              'line-dasharray': [2, 2]
+            }
+          });
+
+          // Fit map to show both points
+          const bounds = new mapboxgl.LngLatBounds();
+          bounds.extend([${from.lng}, ${from.lat}]);
+          bounds.extend([${to.lng}, ${to.lat}]);
+          window.map.fitBounds(bounds, { padding: 50 });
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(directionsScript);
+    }
+  };
+
+  const clearDirections = () => {
+    setShowDirections(false);
+    setSelectedBusForDirections(null);
+
+    if (webViewRef.current && mapInitialized) {
+      const clearScript = `
+        if (window.map && window.map.getLayer('directions')) {
+          window.map.removeLayer('directions');
+          window.map.removeSource('directions');
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(clearScript);
+    }
+  };
+
+  // Memoize the HTML to prevent WebView from re-rendering constantly
+  // Only recreate when bus stops or user location changes, NOT when bus positions change
+  const mapHtml = useMemo(() => {
+    const mapCenter = userLocation ? [userLocation.lng, userLocation.lat] : [38.7578, 9.0301];
+    const mapZoom = userLocation ? 14 : 12;
+
+    return `<!DOCTYPE html>
               <html>
               <head>
                 <meta name='viewport' content='width=device-width, initial-scale=1.0'>
@@ -208,6 +349,35 @@ export default function RegulatorMapScreen() {
                     font-size: 12px;
                     color: #6b7280;
                   }
+                  .bus-marker {
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    border: 2px solid #fff;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                    font-weight: bold;
+                    color: white;
+                    position: relative;
+                  }
+                  .bus-marker.on-time { background-color: #10B981; }
+                  .bus-marker.delayed { background-color: #EF4444; }
+                  .bus-marker.early { background-color: #3B82F6; }
+                  .bus-marker.real-time::after {
+                    content: '';
+                    position: absolute;
+                    top: -2px;
+                    right: -2px;
+                    width: 6px;
+                    height: 6px;
+                    background-color: #10B981;
+                    border-radius: 50%;
+                    border: 1px solid #fff;
+                  }
                 </style>
                 <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
               </head>
@@ -216,42 +386,45 @@ export default function RegulatorMapScreen() {
                 <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
                 <script>
                   mapboxgl.accessToken = 'pk.eyJ1IjoiYmFza2V0bzEyMyIsImEiOiJjbTlqZWVsdzQwZWs5MmtyMDN0b29jMjU1In0.CUIyg0uNKnAfe55aXJ0bBA';
+
                   const map = new mapboxgl.Map({
                     container: 'map',
                     style: 'mapbox://styles/mapbox/streets-v12',
-                    center: [${currentLocation.lng}, ${currentLocation.lat}],
-                    zoom: 13
+                    center: [${mapCenter[0]}, ${mapCenter[1]}],
+                    zoom: ${mapZoom}
                   });
 
-                  // Create regulator marker (similar to driver marker but different color)
-                  const regulatorMarkerEl = document.createElement('div');
-                  regulatorMarkerEl.style.backgroundImage = 'url(data:image/svg+xml;base64,' + btoa(\`
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <circle cx="12" cy="12" r="10" fill="#10B981" stroke="#fff" stroke-width="2"/>
-                      <circle cx="12" cy="12" r="6" fill="#fff"/>
-                      <circle cx="12" cy="12" r="2" fill="#10B981"/>
-                    </svg>
-                  \`) + ')';
-                  regulatorMarkerEl.style.width = '24px';
-                  regulatorMarkerEl.style.height = '24px';
-                  regulatorMarkerEl.style.backgroundSize = 'contain';
-                  regulatorMarkerEl.style.cursor = 'pointer';
+                  // Expose map globally for external control
+                  window.map = map;
 
-                  const regulatorMarker = new mapboxgl.Marker(regulatorMarkerEl)
-                    .setLngLat([${currentLocation.lng}, ${currentLocation.lat}])
-                    .addTo(map);
+                  // Add user location marker if available
+                  ${userLocation ? `
+                    const userMarkerEl = document.createElement('div');
+                    userMarkerEl.style.width = '20px';
+                    userMarkerEl.style.height = '20px';
+                    userMarkerEl.style.borderRadius = '50%';
+                    userMarkerEl.style.backgroundColor = '#007AFF';
+                    userMarkerEl.style.border = '3px solid #fff';
+                    userMarkerEl.style.boxShadow = '0 0 10px rgba(0,122,255,0.5)';
+                    userMarkerEl.style.animation = 'pulse 2s infinite';
 
-                  // Add bus stops
+                    const style = document.createElement('style');
+                    style.textContent = \`@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(0, 122, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0); } }\`;
+                    document.head.appendChild(style);
+
+                    new mapboxgl.Marker(userMarkerEl)
+                      .setLngLat([${userLocation.lng}, ${userLocation.lat}])
+                      .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML('<div style="font-weight: bold;">Your Location</div>'))
+                      .addTo(map);
+                  ` : ''}
+
+                  // Add bus stops (limit console output)
                   const busStops = ${JSON.stringify(busStopsForMap)};
-                  console.log('Regulator dashboard - Bus stops data:', busStops);
-                  console.log('Regulator dashboard - Number of bus stops:', busStops.length);
+                  console.log('Adding', busStops.length, 'bus stops to map');
 
-                  busStops.forEach((stop, index) => {
-                    console.log('Regulator dashboard - Processing stop', index + 1, ':', stop.name, 'at coordinates:', stop.coordinates);
-                    // Create a simple orange dot marker
+                  busStops.forEach((stop) => {
                     const el = document.createElement('div');
-                    el.className = 'bus-stop-marker';
-                    el.style.background = '#FF8800'; // Orange color
+                    el.style.background = '#FF8800';
                     el.style.width = '10px';
                     el.style.height = '10px';
                     el.style.borderRadius = '50%';
@@ -259,109 +432,202 @@ export default function RegulatorMapScreen() {
                     el.style.boxShadow = '0 0 4px rgba(0,0,0,0.15)';
                     el.style.cursor = 'pointer';
 
-                    // Create popup content
-                    const popupContent = \`
-                      <div class="popup-title">\${stop.name}</div>
-                      <div class="popup-info">
-                        \${stop.properties?.capacity ? 'Capacity: ' + stop.properties.capacity + '<br>' : ''}
-                        \${stop.properties?.is_active ? 'Status: Active<br>' : 'Status: Inactive<br>'}
-                        \${stop.properties?.created_at ? 'Created: ' + new Date(stop.properties.created_at).toLocaleDateString() : ''}
-                      </div>
-                    \`;
+                    const popupContent = \`<div class="popup-title">\${stop.name}</div><div class="popup-info">\${stop.properties?.capacity ? 'Capacity: ' + stop.properties.capacity + '<br>' : ''}\${stop.properties?.is_active ? 'Status: Active' : 'Status: Inactive'}</div>\`;
 
-                    // Create popup
-                    const popup = new mapboxgl.Popup({
-                      offset: 25,
-                      closeButton: true,
-                      closeOnClick: false
-                    }).setHTML(popupContent);
-
-                    // Add marker to map
                     new mapboxgl.Marker(el)
                       .setLngLat([stop.coordinates.lng, stop.coordinates.lat])
-                      .setPopup(popup)
+                      .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(popupContent))
                       .addTo(map);
-
-                    console.log('Regulator dashboard - Added marker for stop:', stop.name, 'at:', stop.coordinates);
                   });
 
-                  console.log('Regulator dashboard - Finished adding all', busStops.length, 'bus stops to map');
+                  // Initialize empty bus markers container
+                  window.busMarkers = new Map();
 
-                  // Handle messages from React Native
-                  window.addEventListener('message', function(event) {
-                    try {
-                      const data = JSON.parse(event.data);
-                      if (data.type === 'updateLocation') {
-                        regulatorMarker.setLngLat([data.lng, data.lat]);
-                      } else if (data.type === 'centerOnLocation') {
-                        regulatorMarker.setLngLat([data.lng, data.lat]);
-                        map.flyTo({
-                          center: [data.lng, data.lat],
-                          zoom: 16,
-                          duration: 1000
-                        });
+                  // Function to update bus positions
+                  window.updateBusPositions = function(buses) {
+                    console.log('Updating bus positions:', buses.length, 'buses');
+
+                    // Clear existing bus markers
+                    window.busMarkers.forEach(marker => marker.remove());
+                    window.busMarkers.clear();
+
+                    // Add updated bus markers
+                    buses.forEach((bus) => {
+                      const busEl = document.createElement('div');
+                      busEl.className = \`bus-marker \${bus.status} \${bus.isRealTime ? 'real-time' : ''}\`;
+                      busEl.innerHTML = '🚌';
+
+                      if (bus.heading) {
+                        busEl.style.transform = \`rotate(\${bus.heading}deg)\`;
                       }
-                    } catch (e) {
-                      console.log('Error parsing message:', e);
-                    }
-                  });
 
-                  // For React Native WebView
-                  document.addEventListener('message', function(event) {
-                    try {
-                      const data = JSON.parse(event.data);
-                      if (data.type === 'updateLocation') {
-                        regulatorMarker.setLngLat([data.lng, data.lat]);
-                      } else if (data.type === 'centerOnLocation') {
-                        regulatorMarker.setLngLat([data.lng, data.lat]);
-                        map.flyTo({
-                          center: [data.lng, data.lat],
-                          zoom: 16,
-                          duration: 1000
-                        });
-                      }
-                    } catch (e) {
-                      console.log('Error parsing message:', e);
-                    }
-                  });
+                      const busPopupContent = \`<div class="popup-title">\${bus.name}</div><div class="popup-info">Route: \${bus.routeName}<br>Status: \${bus.status}<br>Next Stop: \${bus.nextStop}<br>ETA: \${bus.eta === 0 ? 'Arriving' : bus.eta + ' min'}<br>\${bus.isRealTime ? '<strong>🔴 Live Tracking</strong><br>' : ''}Last Updated: \${new Date(bus.lastUpdated).toLocaleTimeString()}</div>\`;
+
+                      const busMarker = new mapboxgl.Marker(busEl)
+                        .setLngLat([bus.coordinates.lng, bus.coordinates.lat])
+                        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(busPopupContent))
+                        .addTo(map);
+
+                      window.busMarkers.set(bus.id, busMarker);
+                    });
+                  };
+
+                  console.log('Map initialization complete');
                 </script>
               </body>
-              </html>`
+              </html>`;
+  }, [userLocation, busStopsForMap]); // Removed busesForMap from dependencies
+
+    // Only live tracking buses are shown on the map
+  
+  return (
+    <SafeAreaView style={styles.safeAreaContainer}>
+      {/* Header and Search are part of the normal view, overlaid by fullscreen map */}
+      {!isMapFullScreen && (
+        <View style={styles.headerSearchContainerPadded}>
+          <View style={styles.header}>
+            <Text style={styles.title}>{t('map.title')}</Text>
+            <Text style={styles.subtitle}>{t('map.trackBuses')}</Text>
+            <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
+              Bus stops: {busStopsForMap.length} | Live tracking buses: {busesForMap.length}
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: isRealTimeConnected ? '#10B981' : isUsingFallback ? '#F59E0B' : '#EF4444',
+                  marginRight: 6
+                }} />
+                <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+                  {isRealTimeConnected ? 'Real-time connected' :
+                   isUsingFallback ? 'Using fallback data' :
+                   'Real-time disconnected'}
+                </Text>
+              </View>
+
+              {/* Retry button when disconnected */}
+              {!isRealTimeConnected && (
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('🔄 Manual retry requested');
+                    const { busTrackingSocket } = require('@/utils/socket');
+                    busTrackingSocket.forceReconnect();
+                  }}
+                  style={{
+                    backgroundColor: colors.primary,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 10, color: 'white', fontWeight: '600' }}>
+                    Retry
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Bus Search */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputContainer}>
+              <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search bus by name (e.g., Bus 1)..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={() => {
+                  if (searchQuery.trim()) {
+                    searchBusAndShowDirections(searchQuery.trim());
+                  }
+                }}
+                returnKeyType="search"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                  <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Directions info */}
+            {showDirections && selectedBusForDirections && (
+              <View style={styles.directionsInfo}>
+                <View style={styles.directionsHeader}>
+                  <Text style={styles.directionsTitle}>
+                    Directions to {selectedBusForDirections.name}
+                  </Text>
+                  <TouchableOpacity onPress={clearDirections}>
+                    <Ionicons name="close" size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.directionsText}>
+                  Route: {selectedBusForDirections.routeName} • Status: {selectedBusForDirections.status}
+                </Text>
+                <Text style={styles.directionsText}>
+                  Next Stop: {selectedBusForDirections.nextStop} • ETA: {selectedBusForDirections.eta} min
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* Real-time Bus Status
+      {!isMapFullScreen && <RealTimeBusStatus />} */}
+
+      {/* Map View - Now using WebView for Mapbox */}
+      <View style={isMapFullScreen ? styles.mapContainerFullScreen : styles.mapContainer}>
+        <WebView
+          ref={webViewRef}
+          key="main-map-webview" // Add stable key to prevent unnecessary re-mounts
+          source={{
+            html: mapHtml
           }}
-          ref={setWebViewRef}
-          style={styles.map}
+          style={{ flex: 1 }}
           originWhitelist={["*"]}
           javaScriptEnabled={true}
           domStorageEnabled={true}
-          onMessage={(event) => {
-            // Handle messages from WebView if needed
-            console.log('Message from WebView:', event.nativeEvent.data);
+          onLoadEnd={() => {
+            if (!mapInitialized) { // Only log once
+              setMapInitialized(true);
+              console.log('🗺️ Map initialized successfully');
+            }
           }}
         />
         <TouchableOpacity onPress={toggleMapFullScreen} style={styles.fullScreenButton}>
           {isMapFullScreen ? <Ionicons name="contract" color={colors.primary} size={24}/> : <Ionicons name="expand" color={colors.primary} size={24}/>}
         </TouchableOpacity>
+
         <TouchableOpacity onPress={centerOnUserLocation} style={styles.locationButton}>
-          <Ionicons name="locate" color={colors.primary} size={24}/>
+          <Ionicons name="add" color={colors.primary} size={24}/>
         </TouchableOpacity>
       </View>
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeAreaContainer: { // New style for SafeAreaView
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  searchContainer: {
+    marginBottom: 6,
+  },
+  headerSearchContainerPadded: { // New style for padding header and search
     paddingHorizontal: 16,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+  },
+  listContainerPadded: { // New style for padding list
+    paddingHorizontal: 16,
+    flex: 1, // Ensure list takes remaining space when map is not fullscreen
+  },
+  header: {
+    paddingVertical: Platform.OS === 'ios' ? 20 : 24, // Adjusted padding for iOS/Android
   },
   title: {
     fontSize: 28,
@@ -371,43 +637,34 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: colors.textSecondary,
-  },
-  dutyToggle: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  dutyText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
+    color: colors.text,
   },
   mapContainer: {
-    flex: 1,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 12,
-    overflow: 'hidden',
+    height: 530, // Default height for the map
+    marginHorizontal: 8, // Add horizontal margin to match padding of other elements
+    borderRadius: 12, // Rounded corners for the map container
+    overflow: 'hidden', // Ensures the MapView respects the border radius
     borderWidth: 1,
     borderColor: colors.border,
   },
   mapContainerFullScreen: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 10,
-    backgroundColor: colors.background,
-  },
-  map: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject, // Make map take up the whole screen
+    zIndex: 10, // Ensure map is on top of other content when fullscreen
   },
   fullScreenButton: {
     position: 'absolute',
     top: 10,
     right: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)', // Semi-transparent white
+    padding: 8,
+    borderRadius: 20, // Circular button
+    zIndex: 11, // Ensure button is on top of the map
+  },
+  locationButton: {
+    position: 'absolute',
+    top: 60, // Below the fullscreen button
+    right: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     padding: 8,
     borderRadius: 20,
     zIndex: 11,
@@ -417,18 +674,113 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
-  locationButton: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 8,
-    borderRadius: 20,
-    zIndex: 11,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12, // Increased bottom margin
+  },
+  sectionTitle: {
+    fontSize: 20, // Slightly larger section title
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '600', // Bolder view all text
+  },
+  loadingText: {
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 16,
+    color: colors.gray,
+  },
+  noBusesText: {
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 16,
+    color: colors.gray,
+  },
+  routeCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    marginBottom: 12,
+    backgroundColor: colors.card, // Ensure card background is applied
+    borderRadius: 8, // Ensure card has rounded corners
+  },
+  routeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  routeName: {
+    fontSize: 16,
+    marginLeft: 12,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 0,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.text,
+    paddingVertical: 4,
+    height:40
+  },
+  clearButton: {
+    marginLeft: 8,
+  },
+  quickSearchContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  quickSearchButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  quickSearchText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  directionsInfo: {
+    backgroundColor: colors.card,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  directionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  directionsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  directionsText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });
