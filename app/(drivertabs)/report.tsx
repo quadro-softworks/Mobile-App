@@ -19,6 +19,7 @@ import { useIncidentStore } from '@/stores/incidentStore';
 import { useBusStore } from '@/stores/busStore';
 import { CreateIncidentRequest, IncidentLocation, incidentApi } from '@/services/incidentApi';
 import { Bus, Route } from '@/types';
+import { useWebSocketNotifications } from '@/hooks/useWebSocketNotifications';
 
 interface ReportType {
   id: string;
@@ -46,6 +47,15 @@ export default function ReportScreen() {
   const { reportIncident, fetchUserIncidents, incidents, isLoading: incidentLoading, error: incidentError } = useIncidentStore();
   const { buses, routes, fetchBuses, fetchRoutes } = useBusStore();
   const { t } = useTranslation();
+
+  // WebSocket for real-time incident reporting
+  const { sendIncidentReport, isConnected } = useWebSocketNotifications({
+    onIncidentReported: (incident) => {
+      console.log('🚨 Incident reported via WebSocket:', incident.title);
+      // Refresh incidents list when new incident is reported
+      fetchUserIncidents();
+    }
+  });
 
   // Form state
   const [selectedReportType, setSelectedReportType] = useState<ReportType | null>(null);
@@ -188,7 +198,21 @@ export default function ReportScreen() {
         ...(selectedRoute && { related_route_id: selectedRoute.id }),
       };
 
+      // Submit via API
       await reportIncident(incidentData);
+
+      // Also send via WebSocket for real-time notifications
+      if (isConnected) {
+        sendIncidentReport({
+          description: reportDescription.trim(),
+          incident_type: 'VEHICLE_ISSUE',
+          severity: selectedSeverity,
+          location: currentLocation,
+          ...(selectedBus && { related_bus_id: selectedBus.id }),
+          ...(selectedRoute && { related_route_id: selectedRoute.id }),
+        });
+        console.log('🚨 Incident also sent via WebSocket for real-time notifications');
+      }
 
       // Reset form
       setSelectedReportType(null);
@@ -319,8 +343,13 @@ export default function ReportScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>{t('driver.report')}</Text>
-        <Text style={styles.subtitle}>{t('driver.reportIssue')}</Text>
+        <View>
+          <Text style={styles.title}>{t('driver.report')}</Text>
+          <Text style={styles.subtitle}>{t('driver.reportIssue')}</Text>
+          <Text style={[styles.connectionStatus, { color: isConnected ? colors.success : colors.warning }]}>
+            📡 Real-time reporting: {isConnected ? 'Active' : 'Offline'}
+          </Text>
+        </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -992,5 +1021,10 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
     color: colors.primary,
+  },
+  connectionStatus: {
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: '500',
   },
 });
