@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { useAuthStore } from '@/stores/authStore';
 import { useBusStore } from '@/stores/busStore';
-import { useAlertStore } from '@/stores/alertStore';
 import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
@@ -11,20 +10,17 @@ export default function RegulatorTabs() {
   const { user } = useAuthStore();
   const { t } = useTranslation();
   const setupBusWebSocketListeners = useBusStore((state) => state.setupWebSocketListeners);
-  const setupAlertWebSocketListeners = useAlertStore((state) => state.setupWebSocketListeners);
 
   useEffect(() => {
     if (user) {
       // Setup WebSocket listeners for real-time updates
       const unsubscribeBus = setupBusWebSocketListeners();
-      const unsubscribeAlert = setupAlertWebSocketListeners();
 
       return () => {
         unsubscribeBus();
-        unsubscribeAlert();
       };
     }
-  }, [user, setupBusWebSocketListeners, setupAlertWebSocketListeners]);
+  }, [user, setupBusWebSocketListeners]);
 
   return (
     <Tabs
@@ -71,7 +67,7 @@ export default function RegulatorTabs() {
       <Tabs.Screen
         name="alerts"
         options={{
-          title: t('regulator.alerts'),
+          title: t('notifications.title'),
           tabBarIcon: ({ color, size }) => <Ionicons name="notifications" size={size} color={color} />,
         }}
       />
