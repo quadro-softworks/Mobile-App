@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { View, StyleSheet, Text, Platform, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useRouter } from 'expo-router';
 import { useBusStore } from '@/stores/busStore';
+import { useRealTimeBuses } from '@/hooks/useRealTimeBuses';
+import { RealTimeBusStatus } from '@/components/RealTimeBusStatus';
 import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
@@ -13,58 +15,105 @@ import * as Location from 'expo-location';
 export default function MapScreen() {
   const router = useRouter();
   const { buses, fetchBuses, stops, fetchBusStops } = useBusStore();
+  const {
+    buses: realTimeBuses,
+    isConnected: isRealTimeConnected,
+    connectionStatus,
+    isUsingFallback,
+    joinAreaTracking
+  } = useRealTimeBuses();
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredBuses, setFilteredBuses] = useState<Bus[]>([]);
   const [isMapFullScreen, setMapFullScreen] = useState(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [locationPermission, setLocationPermission] = useState<boolean>(false);
+  const webViewRef = useRef<WebView>(null);
+  const [mapInitialized, setMapInitialized] = useState(false);
+  const [lastBusUpdate, setLastBusUpdate] = useState(0);
 
-  // Transform API bus stops for map display with null checks
-  const busStopsForMap = stops
-    .filter(stop => {
-      // Filter out stops without valid location data
-      const hasLocation = stop.location &&
-        typeof stop.location.longitude === 'number' &&
-        typeof stop.location.latitude === 'number';
+  // Memoize bus stops data to prevent unnecessary re-renders
+  const busStopsForMap = useMemo(() => {
+    return stops
+      .filter(stop => {
+        // Filter out stops without valid location data
+        const hasLocation = stop.location &&
+          typeof stop.location.longitude === 'number' &&
+          typeof stop.location.latitude === 'number';
 
-      const hasCoordinates = stop.coordinates &&
-        typeof stop.coordinates.longitude === 'number' &&
-        typeof stop.coordinates.latitude === 'number';
+        const hasCoordinates = stop.coordinates &&
+          typeof stop.coordinates.longitude === 'number' &&
+          typeof stop.coordinates.latitude === 'number';
 
-      if (!hasLocation && !hasCoordinates) {
-        console.warn('Skipping bus stop without valid coordinates:', stop.name, stop);
-        return false;
-      }
-
-      return true;
-    })
-    .map(stop => {
-      // Use location first, fallback to coordinates
-      const location = stop.location || stop.coordinates;
-
-      return {
-        id: stop.id,
-        name: stop.name,
-        coordinates: {
-          lng: location.longitude,
-          lat: location.latitude
-        },
-        properties: {
-          capacity: stop.capacity,
-          is_active: stop.is_active,
-          created_at: stop.created_at,
-          updated_at: stop.updated_at
+        if (!hasLocation && !hasCoordinates) {
+          return false;
         }
-      };
-    });
 
-  // Debug logging
-  console.log('ALL Bus stops count:', stops.length);
-  console.log('Bus stops for map display:', busStopsForMap.length);
-  if (stops.length > 100) {
-    console.log('✅ Successfully loaded ALL bus stops (more than 100)');
-  }
+        return true;
+      })
+      .map(stop => {
+        // Use location first, fallback to coordinates
+        const location = stop.location || stop.coordinates;
+
+        return {
+          id: stop.id,
+          name: stop.name,
+          coordinates: {
+            lng: location.longitude,
+            lat: location.latitude
+          },
+          properties: {
+            capacity: stop.capacity,
+            is_active: stop.is_active,
+            created_at: stop.created_at,
+            updated_at: stop.updated_at
+          }
+        };
+      });
+  }, [stops]);
+
+  // Memoize bus data to prevent unnecessary re-renders
+  const busesForMap = useMemo(() => {
+    return realTimeBuses
+      .filter(bus => {
+        // Filter out buses without valid coordinates
+        return bus.coordinates &&
+          typeof bus.coordinates.longitude === 'number' &&
+          typeof bus.coordinates.latitude === 'number';
+      })
+      .map(bus => ({
+        id: bus.id,
+        name: bus.name,
+        routeName: bus.routeName,
+        coordinates: {
+          lng: bus.coordinates.longitude,
+          lat: bus.coordinates.latitude
+        },
+        status: bus.status,
+        capacity: bus.capacity,
+        nextStop: bus.nextStop,
+        eta: bus.eta,
+        heading: (bus as any).heading || 0,
+        speed: (bus as any).speed || 0,
+        isRealTime: (bus as any).isRealTime || false,
+        lastUpdated: bus.lastUpdated
+      }));
+  }, [realTimeBuses]);
+
+  // Debug logging (reduced frequency) - only log when significant changes occur
+  useEffect(() => {
+    // Only log when bus stops count changes significantly or connection status changes
+    const shouldLog = stops.length > 0 && (stops.length % 500 === 0 || stops.length === busStopsForMap.length);
+    if (shouldLog || connectionStatus === 'connected') {
+      console.log('📊 Map Data Summary:');
+      console.log('  - Bus stops:', stops.length, '| Displaying:', busStopsForMap.length);
+      console.log('  - Real-time buses:', realTimeBuses.length, '| Displaying:', busesForMap.length);
+      console.log('  - Connection status:', connectionStatus, '| Connected:', isRealTimeConnected);
+      if (stops.length > 100) {
+        console.log('  ✅ Successfully loaded ALL bus stops');
+      }
+    }
+  }, [stops.length, connectionStatus]); // Removed frequently changing dependencies
   
   // Request location permission and get user location
   useEffect(() => {
@@ -100,6 +149,39 @@ export default function MapScreen() {
     // Fetch ALL bus stops (set very high page size to get all)
     fetchBusStops({ ps: 1000 });
   }, [fetchBuses, fetchBusStops]);
+
+  // Join area tracking for Addis Ababa region when component mounts
+  useEffect(() => {
+    // Define bounds for Addis Ababa area
+    const addisAbabaBounds = {
+      north: 9.1,
+      south: 8.9,
+      east: 38.9,
+      west: 38.6
+    };
+
+    console.log('🗺️ Joining area tracking for Addis Ababa region');
+    joinAreaTracking(addisAbabaBounds);
+  }, [joinAreaTracking]);
+
+  // Update bus positions without recreating the map (throttled)
+  useEffect(() => {
+    if (mapInitialized && webViewRef.current && busesForMap.length > 0) {
+      const now = Date.now();
+      // Throttle updates to maximum once every 2 seconds
+      if (now - lastBusUpdate > 2000) {
+        const updateScript = `
+          if (window.updateBusPositions) {
+            window.updateBusPositions(${JSON.stringify(busesForMap)});
+          }
+          true; // Return true to prevent console warnings
+        `;
+
+        webViewRef.current.injectJavaScript(updateScript);
+        setLastBusUpdate(now);
+      }
+    }
+  }, [busesForMap, mapInitialized, lastBusUpdate]);
   
   useEffect(() => {
     if (searchQuery.trim() === '') {
@@ -152,27 +234,14 @@ export default function MapScreen() {
       Alert.alert('Error', 'Unable to get your current location.');
     }
   };
-  
-  return (
-    <SafeAreaView style={styles.safeAreaContainer}>
-      {/* Header and Search are part of the normal view, overlaid by fullscreen map */}
-      {!isMapFullScreen && (
-        <View style={styles.headerSearchContainerPadded}>
-          <View style={styles.header}>
-            <Text style={styles.title}>{t('map.title')}</Text>
-            <Text style={styles.subtitle}>{t('map.trackBuses')}</Text>
-            <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
-              All bus stops loaded: {stops.length} | Displaying: {busStopsForMap.length}
-            </Text>
-          </View>
-        </View>
-      )}
-      
-      {/* Map View - Now using WebView for Mapbox */}
-      <View style={isMapFullScreen ? styles.mapContainerFullScreen : styles.mapContainer}>
-        <WebView
-          source={{
-            html: `<!DOCTYPE html>
+
+  // Memoize the HTML to prevent WebView from re-rendering constantly
+  // Only recreate when bus stops or user location changes, NOT when bus positions change
+  const mapHtml = useMemo(() => {
+    const mapCenter = userLocation ? [userLocation.lng, userLocation.lat] : [38.7578, 9.0301];
+    const mapZoom = userLocation ? 14 : 12;
+
+    return `<!DOCTYPE html>
               <html>
               <head>
                 <meta name='viewport' content='width=device-width, initial-scale=1.0'>
@@ -192,6 +261,35 @@ export default function MapScreen() {
                     font-size: 12px;
                     color: #6b7280;
                   }
+                  .bus-marker {
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    border: 2px solid #fff;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                    font-weight: bold;
+                    color: white;
+                    position: relative;
+                  }
+                  .bus-marker.on-time { background-color: #10B981; }
+                  .bus-marker.delayed { background-color: #EF4444; }
+                  .bus-marker.early { background-color: #3B82F6; }
+                  .bus-marker.real-time::after {
+                    content: '';
+                    position: absolute;
+                    top: -2px;
+                    right: -2px;
+                    width: 6px;
+                    height: 6px;
+                    background-color: #10B981;
+                    border-radius: 50%;
+                    border: 1px solid #fff;
+                  }
                 </style>
                 <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
               </head>
@@ -201,63 +299,41 @@ export default function MapScreen() {
                 <script>
                   mapboxgl.accessToken = 'pk.eyJ1IjoiYmFza2V0bzEyMyIsImEiOiJjbTlqZWVsdzQwZWs5MmtyMDN0b29jMjU1In0.CUIyg0uNKnAfe55aXJ0bBA';
 
-                  // Use user location if available, otherwise default to Addis Ababa
-                  const userLoc = ${JSON.stringify(userLocation)};
-                  const mapCenter = userLoc ? [userLoc.lng, userLoc.lat] : [38.7578, 9.0301];
-                  const mapZoom = userLoc ? 14 : 12;
-
                   const map = new mapboxgl.Map({
                     container: 'map',
                     style: 'mapbox://styles/mapbox/streets-v12',
-                    center: mapCenter,
-                    zoom: mapZoom
+                    center: [${mapCenter[0]}, ${mapCenter[1]}],
+                    zoom: ${mapZoom}
                   });
 
                   // Add user location marker if available
-                  if (userLoc) {
+                  ${userLocation ? `
                     const userMarkerEl = document.createElement('div');
-                    userMarkerEl.className = 'user-location-marker';
                     userMarkerEl.style.width = '20px';
                     userMarkerEl.style.height = '20px';
                     userMarkerEl.style.borderRadius = '50%';
                     userMarkerEl.style.backgroundColor = '#007AFF';
                     userMarkerEl.style.border = '3px solid #fff';
                     userMarkerEl.style.boxShadow = '0 0 10px rgba(0,122,255,0.5)';
-                    userMarkerEl.style.cursor = 'pointer';
-
-                    // Add pulsing animation
                     userMarkerEl.style.animation = 'pulse 2s infinite';
 
-                    // Add CSS animation for pulsing effect
                     const style = document.createElement('style');
-                    style.textContent = \`
-                      @keyframes pulse {
-                        0% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.7); }
-                        70% { box-shadow: 0 0 0 10px rgba(0, 122, 255, 0); }
-                        100% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0); }
-                      }
-                    \`;
+                    style.textContent = \`@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(0, 122, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 122, 255, 0); } }\`;
                     document.head.appendChild(style);
 
-                    const userMarker = new mapboxgl.Marker(userMarkerEl)
-                      .setLngLat([userLoc.lng, userLoc.lat])
+                    new mapboxgl.Marker(userMarkerEl)
+                      .setLngLat([${userLocation.lng}, ${userLocation.lat}])
                       .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML('<div style="font-weight: bold;">Your Location</div>'))
                       .addTo(map);
+                  ` : ''}
 
-                    console.log('Added user location marker at:', userLoc);
-                  }
-
-                  // Add bus stops
+                  // Add bus stops (limit console output)
                   const busStops = ${JSON.stringify(busStopsForMap)};
-                  console.log('Bus stops data:', busStops);
-                  console.log('Number of bus stops:', busStops.length);
+                  console.log('Adding', busStops.length, 'bus stops to map');
 
-                  busStops.forEach((stop, index) => {
-                    console.log('Processing stop', index + 1, ':', stop.name, 'at coordinates:', stop.coordinates);
-                    // Create a simple orange dot marker
+                  busStops.forEach((stop) => {
                     const el = document.createElement('div');
-                    el.className = 'bus-stop-marker';
-                    el.style.background = '#FF8800'; // Orange color
+                    el.style.background = '#FF8800';
                     el.style.width = '10px';
                     el.style.height = '10px';
                     el.style.borderRadius = '50%';
@@ -265,41 +341,102 @@ export default function MapScreen() {
                     el.style.boxShadow = '0 0 4px rgba(0,0,0,0.15)';
                     el.style.cursor = 'pointer';
 
-                    // Create popup content
-                    const popupContent = \`
-                      <div class="popup-title">\${stop.name}</div>
-                      <div class="popup-info">
-                        \${stop.properties?.capacity ? 'Capacity: ' + stop.properties.capacity + '<br>' : ''}
-                        \${stop.properties?.is_active ? 'Status: Active<br>' : 'Status: Inactive<br>'}
-                        \${stop.properties?.created_at ? 'Created: ' + new Date(stop.properties.created_at).toLocaleDateString() : ''}
-                      </div>
-                    \`;
+                    const popupContent = \`<div class="popup-title">\${stop.name}</div><div class="popup-info">\${stop.properties?.capacity ? 'Capacity: ' + stop.properties.capacity + '<br>' : ''}\${stop.properties?.is_active ? 'Status: Active' : 'Status: Inactive'}</div>\`;
 
-                    // Create popup
-                    const popup = new mapboxgl.Popup({
-                      offset: 25,
-                      closeButton: true,
-                      closeOnClick: false
-                    }).setHTML(popupContent);
-
-                    // Add marker to map
-                    const marker = new mapboxgl.Marker(el)
+                    new mapboxgl.Marker(el)
                       .setLngLat([stop.coordinates.lng, stop.coordinates.lat])
-                      .setPopup(popup)
+                      .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(popupContent))
                       .addTo(map);
-
-                    console.log('Added marker for stop:', stop.name, 'at:', stop.coordinates);
                   });
 
-                  console.log('Finished adding all', busStops.length, 'bus stops to map');
+                  // Initialize empty bus markers container
+                  window.busMarkers = new Map();
+
+                  // Function to update bus positions
+                  window.updateBusPositions = function(buses) {
+                    console.log('Updating bus positions:', buses.length, 'buses');
+
+                    // Clear existing bus markers
+                    window.busMarkers.forEach(marker => marker.remove());
+                    window.busMarkers.clear();
+
+                    // Add updated bus markers
+                    buses.forEach((bus) => {
+                      const busEl = document.createElement('div');
+                      busEl.className = \`bus-marker \${bus.status} \${bus.isRealTime ? 'real-time' : ''}\`;
+                      busEl.innerHTML = '🚌';
+
+                      if (bus.heading) {
+                        busEl.style.transform = \`rotate(\${bus.heading}deg)\`;
+                      }
+
+                      const busPopupContent = \`<div class="popup-title">\${bus.name}</div><div class="popup-info">Route: \${bus.routeName}<br>Status: \${bus.status}<br>Next Stop: \${bus.nextStop}<br>ETA: \${bus.eta === 0 ? 'Arriving' : bus.eta + ' min'}<br>\${bus.isRealTime ? '<strong>🔴 Live Tracking</strong><br>' : ''}Last Updated: \${new Date(bus.lastUpdated).toLocaleTimeString()}</div>\`;
+
+                      const busMarker = new mapboxgl.Marker(busEl)
+                        .setLngLat([bus.coordinates.lng, bus.coordinates.lat])
+                        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(busPopupContent))
+                        .addTo(map);
+
+                      window.busMarkers.set(bus.id, busMarker);
+                    });
+                  };
+
+                  console.log('Map initialization complete');
                 </script>
               </body>
-              </html>`
+              </html>`;
+  }, [userLocation, busStopsForMap]); // Removed busesForMap from dependencies
+
+  return (
+    <SafeAreaView style={styles.safeAreaContainer}>
+      {/* Header and Search are part of the normal view, overlaid by fullscreen map */}
+      {!isMapFullScreen && (
+        <View style={styles.headerSearchContainerPadded}>
+          <View style={styles.header}>
+            <Text style={styles.title}>{t('map.title')}</Text>
+            <Text style={styles.subtitle}>{t('map.trackBuses')}</Text>
+            <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
+              Bus stops: {busStopsForMap.length} | Real-time buses: {busesForMap.length}
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+              <View style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: isRealTimeConnected ? '#10B981' : isUsingFallback ? '#F59E0B' : '#EF4444',
+                marginRight: 6
+              }} />
+              <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+                {isRealTimeConnected ? 'Real-time connected' :
+                 isUsingFallback ? 'Using fallback data' :
+                 'Real-time disconnected'}
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Real-time Bus Status */}
+      {!isMapFullScreen && <RealTimeBusStatus />}
+
+      {/* Map View - Now using WebView for Mapbox */}
+      <View style={isMapFullScreen ? styles.mapContainerFullScreen : styles.mapContainer}>
+        <WebView
+          ref={webViewRef}
+          key="main-map-webview" // Add stable key to prevent unnecessary re-mounts
+          source={{
+            html: mapHtml
           }}
           style={{ flex: 1 }}
           originWhitelist={["*"]}
           javaScriptEnabled={true}
           domStorageEnabled={true}
+          onLoadEnd={() => {
+            if (!mapInitialized) { // Only log once
+              setMapInitialized(true);
+              console.log('🗺️ Map initialized successfully');
+            }
+          }}
         />
         <TouchableOpacity onPress={toggleMapFullScreen} style={styles.fullScreenButton}>
           {isMapFullScreen ? <Ionicons name="contract" color={colors.primary} size={24}/> : <Ionicons name="expand" color={colors.primary} size={24}/>}
@@ -309,7 +446,7 @@ export default function MapScreen() {
           <Ionicons name="locate" color={colors.primary} size={24}/>
         </TouchableOpacity>
       </View>
-      
+
     </SafeAreaView>
   );
 }
