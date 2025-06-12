@@ -38,7 +38,7 @@ export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    bottom: 100, // Above the tab bar
+    bottom: 10, // Above the tab bar
     right: 20,
     width: 56,
     height: 56,

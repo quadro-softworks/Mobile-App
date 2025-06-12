@@ -10,6 +10,7 @@ import {
   Modal,
   FlatList,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
@@ -35,18 +36,25 @@ interface AssignedBus {
 }
 
 export default function DriverProfileScreen() {
-  const { user, logout, updateProfile, isLoading } = useAuthStore();
+  const { user, logout, isLoading } = useAuthStore();
   const { t } = useTranslation();
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
+  const [showFAQModal, setShowFAQModal] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('English');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetStep, setResetStep] = useState<'email' | 'confirm'>('email');
+  const [isResetting, setIsResetting] = useState(false);
   const [assignedBus] = useState<AssignedBus>({
     id: 'BUS001',
     licensePlate: 'AA-123-456',
@@ -78,7 +86,6 @@ export default function DriverProfileScreen() {
       const nameParts = user.name.split(' ');
       setFirstName(nameParts[0] || '');
       setLastName(nameParts.slice(1).join(' ') || '');
-      setEmail(user.email || '');
       setPhone(user.phone || '');
     }
   }, [user]);
@@ -116,6 +123,102 @@ export default function DriverProfileScreen() {
     );
   };
 
+  const handlePasswordResetRequest = async () => {
+    if (!resetEmail) {
+      Alert.alert('Error', 'Please enter your email address');
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      const response = await fetch('https://guzosync-fastapi.onrender.com/api/accounts/password/reset/request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: resetEmail }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to send reset email');
+      }
+
+      Alert.alert(
+        'Reset Email Sent',
+        'Please check your email for password reset instructions',
+        [
+          {
+            text: 'OK',
+            onPress: () => setResetStep('confirm'),
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', (error as Error).message);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const handlePasswordResetConfirm = async () => {
+    if (!resetToken || !newPassword || !confirmPassword) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters long');
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      const response = await fetch('https://guzosync-fastapi.onrender.com/api/accounts/password/reset/confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: resetToken,
+          new_password: newPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to reset password');
+      }
+
+      Alert.alert(
+        'Password Reset Successful',
+        'Your password has been reset successfully. Please login with your new password.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setShowPasswordResetModal(false);
+              setResetStep('email');
+              setResetEmail('');
+              setResetToken('');
+              setNewPassword('');
+              setConfirmPassword('');
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', (error as Error).message);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const handleLanguageSelect = (language: { code: string; name: string }) => {
     setSelectedLanguage(language.name);
     setShowLanguageModal(false);
@@ -123,18 +226,47 @@ export default function DriverProfileScreen() {
   };
 
   const handleSaveProfile = async () => {
+    if (!firstName || !lastName) {
+      Alert.alert('Error', 'First name and last name are required');
+      return;
+    }
+
     try {
-      await updateProfile({
-        first_name: firstName,
-        last_name: lastName,
-        email: email,
-        phone_number: phone,
-        profile_image: '',
+      const { token } = useAuthStore.getState();
+      if (!token) {
+        Alert.alert('Error', 'Authentication token not found');
+        return;
+      }
+
+      const response = await fetch('https://guzosync-fastapi.onrender.com/api/account/me', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          phone_number: phone,
+          profile_image: '',
+        }),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to update profile');
+      }
+
+      const updatedUser = await response.json();
+
+      // Update the user in the auth store
+      useAuthStore.setState({ user: updatedUser });
+
       setShowEditModal(false);
       Alert.alert('Success', 'Profile updated successfully');
     } catch (error) {
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
+      console.error('Profile update error:', error);
+      Alert.alert('Error', (error as Error).message || 'Failed to update profile. Please try again.');
     }
   };
 
@@ -147,18 +279,7 @@ export default function DriverProfileScreen() {
     }
   };
 
-  const renderProfileItem = (icon: string, title: string, subtitle: string, onPress?: () => void) => (
-    <TouchableOpacity style={styles.profileItem} onPress={onPress}>
-      <View style={styles.profileItemLeft}>
-        <Ionicons name={icon as any} size={24} color={colors.primary} />
-        <View style={styles.profileItemText}>
-          <Text style={styles.profileItemTitle}>{title}</Text>
-          <Text style={styles.profileItemSubtitle}>{subtitle}</Text>
-        </View>
-      </View>
-      {onPress && <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />}
-    </TouchableOpacity>
-  );
+
 
   const renderAttendanceItem = ({ item }: { item: AttendanceRecord }) => (
     <View style={styles.attendanceItem}>
@@ -180,109 +301,258 @@ export default function DriverProfileScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>{t('driver.profile')}</Text>
-          <Text style={styles.subtitle}>Driver Information & Settings</Text>
+          <Text style={styles.title}>Settings</Text>
         </View>
 
-        {/* Driver Details */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('profile.personalInfo')}</Text>
+        {/* Profile Section */}
+        <View style={styles.profileSection}>
+          <View style={styles.profileHeader}>
+            <View style={styles.avatarContainer}>
+              <View style={styles.avatar}>
+                <Ionicons name="person" size={32} color={colors.primary} />
+              </View>
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.welcomeText}>Welcome</Text>
+              <Text style={styles.userName}>{user?.name || 'Mr. John Doe'}</Text>
+            </View>
             <TouchableOpacity
               style={styles.editButton}
               onPress={() => setShowEditModal(true)}
             >
-              <Ionicons name="pencil" size={16} color={colors.primary} />
-              <Text style={styles.editButtonText}>{t('common.edit')}</Text>
+              <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
-          <View style={styles.card}>
-            <View style={styles.driverInfo}>
-              <View style={styles.avatar}>
-                <Ionicons name="person" size={40} color={colors.primary} />
+        </View>
+
+        {/* Menu Items */}
+        <View style={styles.menuContainer}>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => setShowEditModal(true)}
+          >
+            <View style={styles.menuItemLeft}>
+              <View style={styles.menuIconContainer}>
+                <Ionicons name="person-outline" size={20} color={colors.textSecondary} />
               </View>
-              <View style={styles.driverDetails}>
-                <Text style={styles.driverName}>{user?.name || 'Driver Name'}</Text>
-                <Text style={styles.driverId}>Driver ID: DRV001</Text>
-                <Text style={styles.driverEmail}>{user?.email || 'driver@example.com'}</Text>
-                <Text style={styles.driverPhone}>{user?.phone || 'No phone number'}</Text>
-              </View>
+              <Text style={styles.menuItemText}>User Profile</Text>
             </View>
-          </View>
-        </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
 
-        {/* Attendance */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Attendance</Text>
-          <View style={styles.card}>
-            <TouchableOpacity style={styles.attendanceButton} onPress={handleCheckInOut}>
-              <Ionicons
-                name={isCheckedIn ? "log-out" : "log-in"}
-                size={24}
-                color={colors.card}
-              />
-              <Text style={styles.attendanceButtonText}>
-                {isCheckedIn ? 'Check Out' : 'Check In'}
-              </Text>
-            </TouchableOpacity>
+          <View style={styles.divider} />
 
-            <TouchableOpacity
-              style={styles.viewLogButton}
-              onPress={() => setShowAttendanceModal(true)}
-            >
-              <Text style={styles.viewLogText}>View Attendance Log</Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Assigned Bus */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Assigned Bus</Text>
-          <View style={styles.card}>
-            <View style={styles.busInfo}>
-              <Ionicons name="bus" size={32} color={colors.primary} />
-              <View style={styles.busDetails}>
-                <Text style={styles.busPlate}>{assignedBus.licensePlate}</Text>
-                <Text style={styles.busModel}>{assignedBus.model}</Text>
-                <Text style={styles.busRoute}>{assignedBus.route}</Text>
-                <Text style={styles.busCapacity}>Capacity: {assignedBus.capacity} passengers</Text>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => setShowPasswordResetModal(true)}
+          >
+            <View style={styles.menuItemLeft}>
+              <View style={styles.menuIconContainer}>
+                <Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} />
               </View>
+              <Text style={styles.menuItemText}>Change Password</Text>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => setShowAttendanceModal(true)}
+          >
+            <View style={styles.menuItemLeft}>
+              <View style={styles.menuIconContainer}>
+                <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
+              </View>
+              <Text style={styles.menuItemText}>Attendance Log</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => setShowFAQModal(true)}
+          >
+            <View style={styles.menuItemLeft}>
+              <View style={styles.menuIconContainer}>
+                <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
+              </View>
+              <Text style={styles.menuItemText}>FAQs</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
         </View>
 
-        {/* Settings */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('profile.settings')}</Text>
-          <View style={styles.card}>
-            <LanguageSelector />
-            {renderProfileItem(
-              'help-circle',
-              t('profile.help'),
-              'Contact support team',
-              () => Alert.alert('Support', 'Contact: +251-11-123-4567\nEmail: support@guzosync.com')
-            )}
-          </View>
+        {/* Support Card */}
+        <View style={styles.supportCard}>
+          <Text style={styles.supportText}>
+            If you have any other query you can reach out to us.
+          </Text>
+          <TouchableOpacity
+            style={styles.whatsappButton}
+            onPress={() => Alert.alert('WhatsApp', 'Opening WhatsApp support...')}
+          >
+            <Text style={styles.whatsappText}>WhatsApp Us</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* App Info & Logout */}
-        <View style={styles.section}>
-          <View style={styles.card}>
-            {renderProfileItem(
-              'information-circle',
-              'App Version',
-              'v1.0.0',
-            )}
-            {renderProfileItem(
-              'log-out',
-              'Logout',
-              'Sign out of your account',
-              handleLogout
-            )}
-          </View>
+        {/* Logout */}
+        <View style={styles.logoutSection}>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={20} color={colors.error} />
+            <Text style={styles.logoutText}>Sign Out</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Password Reset Modal */}
+      <Modal visible={showPasswordResetModal} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => {
+              setShowPasswordResetModal(false);
+              setResetStep('email');
+              setResetEmail('');
+              setResetToken('');
+              setNewPassword('');
+              setConfirmPassword('');
+            }}>
+              <Text style={styles.cancelButton}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>
+              {resetStep === 'email' ? 'Reset Password' : 'Confirm Reset'}
+            </Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          <ScrollView style={styles.editModalContent}>
+            {resetStep === 'email' ? (
+              <>
+                <Text style={styles.editFormLabel}>Email Address</Text>
+                <TextInput
+                  style={styles.editFormInput}
+                  value={resetEmail}
+                  onChangeText={setResetEmail}
+                  placeholder="Enter your email address"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+
+                <TouchableOpacity
+                  style={[styles.logoutButton, { marginTop: 20, backgroundColor: colors.primary, borderColor: colors.primary }]}
+                  onPress={handlePasswordResetRequest}
+                  disabled={isResetting}
+                >
+                  {isResetting ? (
+                    <ActivityIndicator size="small" color={colors.card} />
+                  ) : (
+                    <>
+                      <Ionicons name="mail-outline" size={20} color={colors.card} />
+                      <Text style={[styles.logoutText, { color: colors.card }]}>Send Reset Email</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={styles.editFormLabel}>Reset Token</Text>
+                <TextInput
+                  style={styles.editFormInput}
+                  value={resetToken}
+                  onChangeText={setResetToken}
+                  placeholder="Enter reset token from email"
+                />
+
+                <Text style={styles.editFormLabel}>New Password</Text>
+                <TextInput
+                  style={styles.editFormInput}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="Enter new password"
+                  secureTextEntry
+                />
+
+                <Text style={styles.editFormLabel}>Confirm Password</Text>
+                <TextInput
+                  style={styles.editFormInput}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Confirm new password"
+                  secureTextEntry
+                />
+
+                <TouchableOpacity
+                  style={[styles.logoutButton, { marginTop: 20, backgroundColor: colors.primary, borderColor: colors.primary }]}
+                  onPress={handlePasswordResetConfirm}
+                  disabled={isResetting}
+                >
+                  {isResetting ? (
+                    <ActivityIndicator size="small" color={colors.card} />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-outline" size={20} color={colors.card} />
+                      <Text style={[styles.logoutText, { color: colors.card }]}>Reset Password</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* FAQ Modal */}
+      <Modal visible={showFAQModal} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowFAQModal(false)}>
+              <Text style={styles.cancelButton}>Close</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Frequently Asked Questions</Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          <ScrollView style={styles.editModalContent}>
+            <View style={styles.faqItem}>
+              <Text style={styles.faqQuestion}>How do I update my profile?</Text>
+              <Text style={styles.faqAnswer}>
+                Tap on "User Profile" from the settings menu to edit your personal information including name, email, and phone number.
+              </Text>
+            </View>
+
+            <View style={styles.faqItem}>
+              <Text style={styles.faqQuestion}>How do I reset my password?</Text>
+              <Text style={styles.faqAnswer}>
+                Tap on "Change Password" from the settings menu. Enter your email address to receive a reset token, then follow the instructions to set a new password.
+              </Text>
+            </View>
+
+            <View style={styles.faqItem}>
+              <Text style={styles.faqQuestion}>How do I view my attendance?</Text>
+              <Text style={styles.faqAnswer}>
+                Tap on "Attendance Log" to view your complete attendance history including check-in and check-out times.
+              </Text>
+            </View>
+
+            <View style={styles.faqItem}>
+              <Text style={styles.faqQuestion}>How do I contact support?</Text>
+              <Text style={styles.faqAnswer}>
+                You can contact our support team via WhatsApp using the "WhatsApp Us" button in the support section, or call us at +251-11-123-4567.
+              </Text>
+            </View>
+
+            <View style={styles.faqItem}>
+              <Text style={styles.faqQuestion}>How do I change the app language?</Text>
+              <Text style={styles.faqAnswer}>
+                The language selector is available in the settings. Currently, the app supports English and Amharic languages.
+              </Text>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       {/* Language Selection Modal */}
       <Modal
@@ -380,16 +650,6 @@ export default function DriverProfileScreen() {
               placeholder="Enter last name"
             />
 
-            <Text style={styles.editFormLabel}>Email</Text>
-            <TextInput
-              style={styles.editFormInput}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Enter email"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-
             <Text style={styles.editFormLabel}>Phone Number</Text>
             <TextInput
               style={styles.editFormInput}
@@ -414,149 +674,132 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    backgroundColor: colors.background,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: colors.primary,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.textSecondary,
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
     color: colors.text,
-    marginBottom: 12,
   },
-  card: {
+  profileSection: {
     backgroundColor: colors.card,
+    marginHorizontal: 20,
+    marginBottom: 20,
     borderRadius: 12,
     padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
-  driverInfo: {
+  profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  avatarContainer: {
+    marginRight: 16,
   },
   avatar: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: colors.highlight,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  welcomeText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  userName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  editButton: {
+    padding: 8,
+  },
+  menuContainer: {
+    backgroundColor: colors.card,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  menuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  menuIconContainer: {
+    width: 24,
+    height: 24,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
   },
-  driverDetails: {
-    flex: 1,
-  },
-  driverName: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  menuItemText: {
+    fontSize: 16,
     color: colors.text,
-    marginBottom: 4,
+    fontWeight: '500',
   },
-  driverId: {
+  divider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+    marginLeft: 56,
+  },
+
+  supportCard: {
+    backgroundColor: '#f0f9ff',
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+  },
+  supportText: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginBottom: 2,
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
   },
-  driverEmail: {
-    fontSize: 14,
-    color: colors.textSecondary,
+  whatsappButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 8,
   },
-  attendanceButton: {
-    backgroundColor: colors.primary,
+  whatsappText: {
+    fontSize: 16,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  logoutSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  logoutButton: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    gap: 8,
   },
-  attendanceButtonText: {
-    color: colors.card,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  viewLogButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  viewLogText: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-  busInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  busDetails: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  busPlate: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  busModel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 2,
-  },
-  busRoute: {
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 2,
-  },
-  busCapacity: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  profileItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  profileItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  profileItemText: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  profileItemTitle: {
+  logoutText: {
     fontSize: 16,
     fontWeight: '500',
-    color: colors.text,
-    marginBottom: 2,
-  },
-  profileItemSubtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
+    color: colors.error,
+    marginLeft: 8,
   },
   modalContainer: {
     flex: 1,
@@ -633,30 +876,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: colors.highlight,
-    borderRadius: 16,
-    gap: 4,
-  },
-  editButtonText: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-  driverPhone: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
   editModalContainer: {
     flex: 1,
     backgroundColor: colors.background,
@@ -694,5 +913,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     fontSize: 16,
+  },
+  faqItem: {
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  faqQuestion: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  faqAnswer: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    lineHeight: 20,
   },
 });

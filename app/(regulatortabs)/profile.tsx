@@ -184,119 +184,145 @@ export default function RegulatorProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Header */}
+        {/* Header with Gradient Background */}
         <View style={styles.header}>
-          <Text style={styles.title}>{t('regulator.profile')}</Text>
-          <Text style={styles.subtitle}>Queue Regulator Information & Settings</Text>
-        </View>
-
-        {/* Regulator Details */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{t('profile.personalInfo')}</Text>
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => setShowEditModal(true)}
-            >
-              <Ionicons name="pencil" size={16} color={colors.primary} />
-              <Text style={styles.editButtonText}>{t('common.edit')}</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.card}>
-            <View style={styles.regulatorInfo}>
-              <View style={styles.avatar}>
-                <Ionicons name="person" size={40} color={colors.primary} />
+          <View style={styles.headerContent}>
+            <View style={styles.profileImageContainer}>
+              <View style={styles.profileImage}>
+                <Ionicons name="shield-checkmark" size={50} color={colors.card} />
               </View>
-              <View style={styles.regulatorDetails}>
-                <Text style={styles.regulatorName}>{user?.name || 'Regulator Name'}</Text>
-                <Text style={styles.regulatorId}>Regulator ID: REG001</Text>
-                <Text style={styles.regulatorEmail}>{user?.email || 'regulator@example.com'}</Text>
-                <Text style={styles.regulatorPhone}>{user?.phone || 'No phone number'}</Text>
-              </View>
+              <TouchableOpacity
+                style={styles.editProfileButton}
+                onPress={() => setShowEditModal(true)}
+              >
+                <Ionicons name="pencil" size={16} color={colors.card} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.headerInfo}>
+              <Text style={styles.userName}>{user?.name || 'Regulator Name'}</Text>
+              <Text style={styles.userRole}>Queue Regulator</Text>
+              <Text style={styles.userId}>ID: REG001</Text>
             </View>
           </View>
         </View>
 
-        {/* Attendance */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Attendance</Text>
-          <View style={styles.card}>
-            <TouchableOpacity style={styles.attendanceButton} onPress={handleCheckInOut}>
-              <Ionicons
-                name={isCheckedIn ? "log-out" : "log-in"}
-                size={24}
-                color={colors.card}
-              />
-              <Text style={styles.attendanceButtonText}>
-                {isCheckedIn ? 'Check Out' : 'Check In'}
-              </Text>
-            </TouchableOpacity>
+        {/* Quick Stats */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Ionicons name="location" size={24} color={colors.primary} />
+            <Text style={styles.statNumber}>{assignedStops.length}</Text>
+            <Text style={styles.statLabel}>Assigned Stops</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Ionicons name="time" size={24} color={colors.success} />
+            <Text style={styles.statNumber}>96%</Text>
+            <Text style={styles.statLabel}>Efficiency</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Ionicons name="people" size={24} color={colors.warning} />
+            <Text style={styles.statNumber}>1.2k</Text>
+            <Text style={styles.statLabel}>Daily Passengers</Text>
+          </View>
+        </View>
 
-            <TouchableOpacity
-              style={styles.viewLogButton}
-              onPress={() => setShowAttendanceModal(true)}
-            >
-              <Text style={styles.viewLogText}>View Attendance Log</Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-            </TouchableOpacity>
+        {/* Personal Information */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Personal Information</Text>
+          <View style={styles.infoCard}>
+            <View style={styles.infoRow}>
+              <View style={styles.infoIconContainer}>
+                <Ionicons name="mail" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Email</Text>
+                <Text style={styles.infoValue}>{user?.email || 'regulator@example.com'}</Text>
+              </View>
+            </View>
+            <View style={styles.infoRow}>
+              <View style={styles.infoIconContainer}>
+                <Ionicons name="call" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Phone</Text>
+                <Text style={styles.infoValue}>{user?.phone || 'No phone number'}</Text>
+              </View>
+            </View>
           </View>
         </View>
 
         {/* Assigned Stops */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Assigned Bus Stops</Text>
-          <View style={styles.card}>
-            {assignedStops.map((stop, index) => (
-              <View key={stop.id} style={[styles.stopItem, index > 0 && styles.stopItemBorder]}>
+          {assignedStops.map((stop, index) => (
+            <View key={stop.id} style={styles.stopCard}>
+              <View style={styles.stopHeader}>
+                <View style={styles.stopIconContainer}>
+                  <Ionicons name="location" size={28} color={colors.card} />
+                </View>
                 <View style={styles.stopInfo}>
-                  <Ionicons name="location" size={24} color={colors.primary} />
-                  <View style={styles.stopDetails}>
-                    <Text style={styles.stopName}>{stop.name}</Text>
-                    <Text style={styles.stopLocation}>{stop.location}</Text>
-                    <View style={styles.routesContainer}>
-                      <Text style={styles.routesLabel}>Routes: </Text>
-                      {stop.routes.map((route, routeIndex) => (
-                        <View key={routeIndex} style={styles.routeBadge}>
-                          <Text style={styles.routeText}>{route}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
+                  <Text style={styles.stopName}>{stop.name}</Text>
+                  <Text style={styles.stopLocation}>{stop.location}</Text>
                 </View>
               </View>
-            ))}
+              <View style={styles.routesContainer}>
+                <Text style={styles.routesLabel}>Active Routes:</Text>
+                <View style={styles.routesList}>
+                  {stop.routes.map((route, routeIndex) => (
+                    <View key={routeIndex} style={styles.routeBadge}>
+                      <Text style={styles.routeText}>{route}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Attendance */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Attendance</Text>
+          <View style={styles.attendanceCard}>
+            <TouchableOpacity
+              style={styles.viewLogButton}
+              onPress={() => setShowAttendanceModal(true)}
+            >
+              <View style={styles.attendanceInfo}>
+                <Ionicons name="calendar-outline" size={24} color={colors.primary} />
+                <View style={styles.attendanceText}>
+                  <Text style={styles.attendanceTitle}>View Attendance Log</Text>
+                  <Text style={styles.attendanceSubtitle}>Check your attendance history</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
           </View>
         </View>
 
         {/* Settings */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('profile.settings')}</Text>
-          <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Settings</Text>
+          <View style={styles.settingsCard}>
             <LanguageSelector />
             {renderProfileItem(
               'help-circle',
-              t('profile.help'),
+              'Help & Support',
               'Contact support team',
               () => Alert.alert('Support', 'Contact: +251-11-123-4567\nEmail: support@guzosync.com')
             )}
-          </View>
-        </View>
-
-        {/* App Info & Logout */}
-        <View style={styles.section}>
-          <View style={styles.card}>
             {renderProfileItem(
               'information-circle',
               'App Version',
               'v1.0.0',
             )}
-            {renderProfileItem(
-              'log-out',
-              'Logout',
-              'Sign out of your account',
-              handleLogout
-            )}
           </View>
+        </View>
+
+        {/* Logout */}
+        <View style={styles.section}>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Ionicons name="log-out" size={24} color={colors.error} />
+            <Text style={styles.logoutText}>Sign Out</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -424,151 +450,278 @@ export default function RegulatorProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#f8fafc',
   },
   content: {
     flex: 1,
   },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 30,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.primary,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.textSecondary,
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 12,
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  regulatorInfo: {
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.highlight,
+  profileImageContainer: {
+    position: 'relative',
+    marginRight: 16,
+  },
+  profileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: colors.card,
+  },
+  editProfileButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.card,
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.card,
+    marginBottom: 4,
+  },
+  userRole: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginBottom: 2,
+  },
+  userId: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  section: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 16,
+  },
+  infoCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  infoIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
   },
-  regulatorDetails: {
+  infoContent: {
     flex: 1,
   },
-  regulatorName: {
+  infoLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  infoValue: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  stopCard: {
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  stopHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  stopIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  stopInfo: {
+    flex: 1,
+  },
+  stopName: {
     fontSize: 18,
     fontWeight: 'bold',
+    color: colors.card,
+    marginBottom: 4,
+  },
+  stopLocation: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  routesContainer: {
+    gap: 8,
+  },
+  routesLabel: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '600',
+  },
+  routesList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  routeBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  routeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.card,
+  },
+  attendanceCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  attendanceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  attendanceText: {
+    marginLeft: 16,
+    flex: 1,
+  },
+  attendanceTitle: {
+    fontSize: 16,
+    fontWeight: '600',
     color: colors.text,
     marginBottom: 4,
   },
-  regulatorId: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 2,
-  },
-  regulatorEmail: {
+  attendanceSubtitle: {
     fontSize: 14,
     color: colors.textSecondary,
   },
-  attendanceButton: {
-    backgroundColor: colors.primary,
+  settingsCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  logoutButton: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: colors.error,
   },
-  attendanceButtonText: {
-    color: colors.card,
+  logoutText: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    color: colors.error,
+    marginLeft: 12,
   },
   viewLogButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  viewLogText: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-  stopItem: {
     paddingVertical: 12,
   },
-  stopItemBorder: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  stopInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  stopDetails: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  stopName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  stopLocation: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 8,
-  },
-  routesContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  routesLabel: {
-    fontSize: 12,
-    color: colors.text,
-    fontWeight: '500',
-    marginRight: 4,
-  },
-  routeBadge: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginRight: 4,
-    marginBottom: 2,
-  },
-  routeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: colors.card,
-  },
+
   profileItem: {
     flexDirection: 'row',
     alignItems: 'center',
