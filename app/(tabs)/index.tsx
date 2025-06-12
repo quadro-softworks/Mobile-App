@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { View, StyleSheet, Text, Platform, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
+import { View, StyleSheet, Text, Platform, SafeAreaView, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { useRouter } from 'expo-router';
+// import { useRouter } from 'expo-router'; // Removed unused import
 import { useBusStore } from '@/stores/busStore';
 import { useRealTimeBuses } from '@/hooks/useRealTimeBuses';
 import { RealTimeBusStatus } from '@/components/RealTimeBusStatus';
@@ -13,8 +13,7 @@ import * as Location from 'expo-location';
 
 
 export default function MapScreen() {
-  const router = useRouter();
-  const { buses, fetchBuses, stops, fetchBusStops } = useBusStore();
+  const { fetchBuses, stops, fetchBusStops } = useBusStore();
   const {
     buses: realTimeBuses,
     isConnected: isRealTimeConnected,
@@ -24,13 +23,14 @@ export default function MapScreen() {
   } = useRealTimeBuses();
   const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredBuses, setFilteredBuses] = useState<Bus[]>([]);
   const [isMapFullScreen, setMapFullScreen] = useState(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [locationPermission, setLocationPermission] = useState<boolean>(false);
   const webViewRef = useRef<WebView>(null);
   const [mapInitialized, setMapInitialized] = useState(false);
   const [lastBusUpdate, setLastBusUpdate] = useState(0);
+  const [selectedBusForDirections, setSelectedBusForDirections] = useState<Bus | null>(null);
+  const [showDirections, setShowDirections] = useState(false);
 
   // Memoize bus stops data to prevent unnecessary re-renders
   const busStopsForMap = useMemo(() => {
@@ -183,23 +183,7 @@ export default function MapScreen() {
     }
   }, [busesForMap, mapInitialized, lastBusUpdate]);
   
-  useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setFilteredBuses(buses);
-    } else {
-      const query = searchQuery.toLowerCase();
-      const filtered = buses.filter(
-        bus => 
-          bus.name.toLowerCase().includes(query) || 
-          bus.routeName.toLowerCase().includes(query)
-      );
-      setFilteredBuses(filtered);
-    }
-  }, [buses, searchQuery]);
-  
-  const handleBusPress = (bus: Bus) => {
-    router.push(`/bus/${bus.id}`);
-  };
+  // Bus search and directions functionality
   
   const toggleMapFullScreen = () => {
     setMapFullScreen(!isMapFullScreen);
@@ -223,15 +207,115 @@ export default function MapScreen() {
       };
       setUserLocation(newLocation);
 
-      // You could also send a message to the WebView to center the map
-      // webViewRef?.postMessage(JSON.stringify({
-      //   type: 'centerOnLocation',
-      //   lat: newLocation.lat,
-      //   lng: newLocation.lng
-      // }));
+      // Send message to WebView to center the map on user location
+      if (webViewRef.current && mapInitialized) {
+        const centerScript = `
+          if (window.map) {
+            window.map.flyTo({
+              center: [${newLocation.lng}, ${newLocation.lat}],
+              zoom: 15,
+              duration: 1000
+            });
+          }
+          true;
+        `;
+        webViewRef.current.injectJavaScript(centerScript);
+      }
     } catch (error) {
       console.error('Error getting current location:', error);
       Alert.alert('Error', 'Unable to get your current location.');
+    }
+  };
+
+  const searchBusAndShowDirections = (busName: string) => {
+    // Find bus by name (case insensitive)
+    const foundBus = busesForMap.find(bus =>
+      bus.name.toLowerCase().includes(busName.toLowerCase())
+    );
+
+    if (!foundBus) {
+      Alert.alert('Bus Not Found', `No bus found with name "${busName}"`);
+      return;
+    }
+
+    if (!userLocation) {
+      Alert.alert('Location Required', 'Please enable location permission to get directions.');
+      return;
+    }
+
+    setSelectedBusForDirections(foundBus as any); // Type assertion for map bus format
+    setShowDirections(true);
+
+    // Show directions on map
+    showDirectionsOnMap(userLocation, foundBus.coordinates);
+  };
+
+  const showDirectionsOnMap = (from: {lat: number, lng: number}, to: {lng: number, lat: number}) => {
+    if (webViewRef.current && mapInitialized) {
+      const directionsScript = `
+        if (window.map) {
+          // Remove existing directions layer
+          if (window.map.getLayer('directions')) {
+            window.map.removeLayer('directions');
+            window.map.removeSource('directions');
+          }
+
+          // Add directions route (simple straight line for now)
+          window.map.addSource('directions', {
+            'type': 'geojson',
+            'data': {
+              'type': 'Feature',
+              'properties': {},
+              'geometry': {
+                'type': 'LineString',
+                'coordinates': [
+                  [${from.lng}, ${from.lat}],
+                  [${to.lng}, ${to.lat}]
+                ]
+              }
+            }
+          });
+
+          window.map.addLayer({
+            'id': 'directions',
+            'type': 'line',
+            'source': 'directions',
+            'layout': {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            'paint': {
+              'line-color': '#007AFF',
+              'line-width': 4,
+              'line-dasharray': [2, 2]
+            }
+          });
+
+          // Fit map to show both points
+          const bounds = new mapboxgl.LngLatBounds();
+          bounds.extend([${from.lng}, ${from.lat}]);
+          bounds.extend([${to.lng}, ${to.lat}]);
+          window.map.fitBounds(bounds, { padding: 50 });
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(directionsScript);
+    }
+  };
+
+  const clearDirections = () => {
+    setShowDirections(false);
+    setSelectedBusForDirections(null);
+
+    if (webViewRef.current && mapInitialized) {
+      const clearScript = `
+        if (window.map && window.map.getLayer('directions')) {
+          window.map.removeLayer('directions');
+          window.map.removeSource('directions');
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(clearScript);
     }
   };
 
@@ -305,6 +389,9 @@ export default function MapScreen() {
                     center: [${mapCenter[0]}, ${mapCenter[1]}],
                     zoom: ${mapZoom}
                   });
+
+                  // Expose map globally for external control
+                  window.map = map;
 
                   // Add user location marker if available
                   ${userLocation ? `
@@ -387,6 +474,19 @@ export default function MapScreen() {
               </html>`;
   }, [userLocation, busStopsForMap]); // Removed busesForMap from dependencies
 
+    const { 
+      buses, 
+      isConnected, 
+    } = useRealTimeBuses();
+  
+    const getStatusText = () => {
+      if (isConnected) return 'Real-time Connected';
+      if (isUsingFallback) return 'Using Fallback Data';
+      return 'Disconnected';
+    };
+  
+    const realTimeBusCount = buses.filter(bus => (bus as any).isRealTime).length;
+  
   return (
     <SafeAreaView style={styles.safeAreaContainer}>
       {/* Header and Search are part of the normal view, overlaid by fullscreen map */}
@@ -396,9 +496,9 @@ export default function MapScreen() {
             <Text style={styles.title}>{t('map.title')}</Text>
             <Text style={styles.subtitle}>{t('map.trackBuses')}</Text>
             <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
-              Bus stops: {busStopsForMap.length} | Real-time buses: {busesForMap.length}
+              Bus stops: {busStopsForMap.length} | Real-time buses: {busesForMap.length} | Live-Tracking: {realTimeBusCount}
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={{
                 width: 8,
                 height: 8,
@@ -413,11 +513,55 @@ export default function MapScreen() {
               </Text>
             </View>
           </View>
+
+          {/* Bus Search */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputContainer}>
+              <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search bus by name (e.g., Bus 1)..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={() => {
+                  if (searchQuery.trim()) {
+                    searchBusAndShowDirections(searchQuery.trim());
+                  }
+                }}
+                returnKeyType="search"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                  <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Directions info */}
+            {showDirections && selectedBusForDirections && (
+              <View style={styles.directionsInfo}>
+                <View style={styles.directionsHeader}>
+                  <Text style={styles.directionsTitle}>
+                    Directions to {selectedBusForDirections.name}
+                  </Text>
+                  <TouchableOpacity onPress={clearDirections}>
+                    <Ionicons name="close" size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.directionsText}>
+                  Route: {selectedBusForDirections.routeName} • Status: {selectedBusForDirections.status}
+                </Text>
+                <Text style={styles.directionsText}>
+                  Next Stop: {selectedBusForDirections.nextStop} • ETA: {selectedBusForDirections.eta} min
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
       )}
 
-      {/* Real-time Bus Status */}
-      {!isMapFullScreen && <RealTimeBusStatus />}
+      {/* Real-time Bus Status
+      {!isMapFullScreen && <RealTimeBusStatus />} */}
 
       {/* Map View - Now using WebView for Mapbox */}
       <View style={isMapFullScreen ? styles.mapContainerFullScreen : styles.mapContainer}>
@@ -443,7 +587,7 @@ export default function MapScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity onPress={centerOnUserLocation} style={styles.locationButton}>
-          <Ionicons name="locate" color={colors.primary} size={24}/>
+          <Ionicons name="add" color={colors.primary} size={24}/>
         </TouchableOpacity>
       </View>
 
@@ -455,6 +599,9 @@ const styles = StyleSheet.create({
   safeAreaContainer: { // New style for SafeAreaView
     flex: 1,
     backgroundColor: colors.background,
+  },
+  searchContainer: {
+    marginBottom: 6,
   },
   headerSearchContainerPadded: { // New style for padding header and search
     paddingHorizontal: 16,
@@ -481,7 +628,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 8, // Add horizontal margin to match padding of other elements
     borderRadius: 12, // Rounded corners for the map container
     overflow: 'hidden', // Ensures the MapView respects the border radius
-    marginBottom: 16, // Space below the map before the list starts
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -516,7 +662,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 20, // Increased top margin for better separation
     marginBottom: 12, // Increased bottom margin
   },
   sectionTitle: {
@@ -559,5 +704,67 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     color: colors.text,
     fontWeight: '500',
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 0,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.text,
+    paddingVertical: 4,
+    height:40
+  },
+  clearButton: {
+    marginLeft: 8,
+  },
+  quickSearchContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  quickSearchButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  quickSearchText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  directionsInfo: {
+    backgroundColor: colors.card,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  directionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  directionsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  directionsText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });
