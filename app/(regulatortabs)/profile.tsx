@@ -38,9 +38,7 @@ export default function RegulatorProfileScreen() {
   const { t } = useTranslation();
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
-  const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState('English');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -60,10 +58,7 @@ export default function RegulatorProfileScreen() {
     }
   ]);
 
-  const languages = [
-    { code: 'en', name: 'English' },
-    { code: 'am', name: 'አማርኛ (Amharic)' },
-  ];
+  // Language selection is now handled by LanguageSelector component
 
   // Mock attendance data
   const mockAttendance: AttendanceRecord[] = [
@@ -115,11 +110,7 @@ export default function RegulatorProfileScreen() {
     );
   };
 
-  const handleLanguageSelect = (language: { code: string; name: string }) => {
-    setSelectedLanguage(language.name);
-    setShowLanguageModal(false);
-    Alert.alert('Language Changed', `Language changed to ${language.name}`);
-  };
+  // Language selection is now handled by LanguageSelector component
 
   const handleSaveProfile = async () => {
     try {
@@ -362,40 +353,7 @@ export default function RegulatorProfileScreen() {
     </Modal>
   );
 
-  const renderLanguageModal = () => (
-    <Modal
-      visible={showLanguageModal}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={() => setShowLanguageModal(false)}
-    >
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
-            <Text style={styles.cancelButton}>Cancel</Text>
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>Select Language</Text>
-          <View style={{ width: 60 }} />
-        </View>
-
-        <FlatList
-          data={languages}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.languageItem}
-              onPress={() => handleLanguageSelect(item)}
-            >
-              <Text style={styles.languageName}>{item.name}</Text>
-              {selectedLanguage === item.name && (
-                <Ionicons name="checkmark" size={20} color={colors.primary} />
-              )}
-            </TouchableOpacity>
-          )}
-          keyExtractor={(item) => item.code}
-        />
-      </SafeAreaView>
-    </Modal>
-  );
+  // Language selection is now handled by LanguageSelector component
 
   const renderEditProfileModal = () => (
     <Modal
@@ -475,13 +433,15 @@ export default function RegulatorProfileScreen() {
           {renderProfileItem('person', 'Personal Information', `${firstName} ${lastName}`, () => setShowEditModal(true))}
           {renderProfileItem('mail', 'Email', email)}
           {renderProfileItem('call', 'Phone', phone)}
-          {renderProfileItem('language', 'Language', selectedLanguage, () => setShowLanguageModal(true))}
+
+          {/* Use the proper LanguageSelector component */}
+          <LanguageSelector />
+
           {renderProfileItem('help-circle', 'FAQ', 'Get Help', () => setShowFAQModal(true))}
           {renderProfileItem('lock-closed', 'Reset Password', 'Change your password', () => setShowPasswordResetModal(true))}
           {renderProfileItem('log-out', 'Logout', 'Sign out of your account', handleLogout)}
         </View>
         {/* Modals */}
-        {renderLanguageModal()}
         {renderEditProfileModal()}
         {renderPasswordResetModal()}
         {renderFAQModal()}

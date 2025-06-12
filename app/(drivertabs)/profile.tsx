@@ -11,10 +11,16 @@ import {
   FlatList,
   TextInput,
   ActivityIndicator,
+  StatusBar,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
 import { LanguageSelector } from '@/components/LanguageSelector';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
 import { router } from 'expo-router';
@@ -41,11 +47,9 @@ export default function DriverProfileScreen() {
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
-  const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
   const [showFAQModal, setShowFAQModal] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState('English');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
@@ -63,12 +67,7 @@ export default function DriverProfileScreen() {
     route: 'Route 12 - Stadium to 4 Kilo'
   });
 
-  const languages = [
-    { code: 'en', name: 'English' },
-    { code: 'am', name: 'አማርኛ (Amharic)' },
-    { code: 'or', name: 'Afaan Oromoo' },
-    { code: 'ti', name: 'ትግርኛ (Tigrinya)' },
-  ];
+  // Language selection is now handled by LanguageSelector component
 
   // Mock attendance data
   const mockAttendance: AttendanceRecord[] = [
@@ -219,11 +218,7 @@ export default function DriverProfileScreen() {
     }
   };
 
-  const handleLanguageSelect = (language: { code: string; name: string }) => {
-    setSelectedLanguage(language.name);
-    setShowLanguageModal(false);
-    Alert.alert('Language Changed', `Language changed to ${language.name}`);
-  };
+  // Language selection is now handled by LanguageSelector component
 
   const handleSaveProfile = async () => {
     if (!firstName || !lastName) {
@@ -296,115 +291,216 @@ export default function DriverProfileScreen() {
     </View>
   );
 
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
+        <LinearGradient
+          colors={[colors.primary, colors.secondary]}
+          style={styles.gradientBackground}
+        >
+          <View style={styles.emptyStateContainer}>
+            <BlurView intensity={20} style={styles.emptyStateCard}>
+              <View style={styles.emptyStateIconContainer}>
+                <Ionicons name="person" size={60} color={colors.primary} />
+              </View>
+              <Text style={styles.emptyStateTitle}>Login Required</Text>
+              <Text style={styles.emptyStateText}>
+                Please sign in to access your driver profile and features
+              </Text>
+              <Button
+                title="Login"
+                onPress={() => router.replace('/(auth)/login')}
+                style={styles.signInButton}
+              />
+            </BlurView>
+          </View>
+        </LinearGradient>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Settings</Text>
-        </View>
+      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
 
-        {/* Profile Section */}
-        <View style={styles.profileSection}>
-          <View style={styles.profileHeader}>
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <Ionicons name="person" size={32} color={colors.primary} />
+      {/* Header with Gradient Background */}
+      <LinearGradient
+        colors={[colors.primary, colors.secondary]}
+        style={styles.headerGradient}
+      >
+        <View style={styles.headerContent}>
+          <TouchableOpacity
+            style={styles.avatarContainer}
+            activeOpacity={0.8}
+          >
+            <View style={styles.avatarWrapper}>
+              <View style={styles.avatarPlaceholder}>
+                <Ionicons name="car-sport" size={50} color={colors.card} />
               </View>
+              <View style={styles.avatarBorder} />
             </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.welcomeText}>Welcome</Text>
-              <Text style={styles.userName}>{user?.name || 'Mr. John Doe'}</Text>
+            <View style={styles.cameraButton}>
+              <Ionicons name="camera" size={18} color={colors.card} />
             </View>
+          </TouchableOpacity>
+
+          <View style={styles.userInfo}>
+            <Text style={styles.userName}>{user?.name}</Text>
+            <Text style={styles.userRole}>Driver</Text>
+            <Text style={styles.userEmail}>{user?.email}</Text>
             <TouchableOpacity
               style={styles.editButton}
               onPress={() => setShowEditModal(true)}
             >
-              <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
+              <Ionicons name="create-outline" size={16} color={colors.card} />
+              <Text style={styles.editButtonText}>Edit Profile</Text>
             </TouchableOpacity>
           </View>
         </View>
+      </LinearGradient>
 
-        {/* Menu Items */}
-        <View style={styles.menuContainer}>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => setShowEditModal(true)}
-          >
-            <View style={styles.menuItemLeft}>
-              <View style={styles.menuIconContainer}>
-                <Ionicons name="person-outline" size={20} color={colors.textSecondary} />
+      {/* Content */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Personal Information Card */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Personal Information</Text>
+          <Card style={styles.modernCard}>
+            <View style={styles.infoItem}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="mail" size={20} color={colors.primary} />
               </View>
-              <Text style={styles.menuItemText}>User Profile</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-          </TouchableOpacity>
-
-          <View style={styles.divider} />
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => setShowPasswordResetModal(true)}
-          >
-            <View style={styles.menuItemLeft}>
-              <View style={styles.menuIconContainer}>
-                <Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Email</Text>
+                <Text style={styles.infoValue}>{user.email}</Text>
               </View>
-              <Text style={styles.menuItemText}>Change Password</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-          </TouchableOpacity>
 
-          <View style={styles.divider} />
+            <View style={styles.divider} />
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => setShowAttendanceModal(true)}
-          >
-            <View style={styles.menuItemLeft}>
-              <View style={styles.menuIconContainer}>
-                <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
+            <View style={styles.infoItem}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="call" size={20} color={colors.primary} />
               </View>
-              <Text style={styles.menuItemText}>Attendance Log</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-          </TouchableOpacity>
-
-          <View style={styles.divider} />
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => setShowFAQModal(true)}
-          >
-            <View style={styles.menuItemLeft}>
-              <View style={styles.menuIconContainer}>
-                <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Phone</Text>
+                <Text style={styles.infoValue}>{user.phone || 'Not set'}</Text>
               </View>
-              <Text style={styles.menuItemText}>FAQs</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-          </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <LanguageSelector />
+          </Card>
         </View>
 
-        {/* Support Card */}
-        <View style={styles.supportCard}>
-          <Text style={styles.supportText}>
-            If you have any other query you can reach out to us.
-          </Text>
-          <TouchableOpacity
-            style={styles.whatsappButton}
-            onPress={() => Alert.alert('WhatsApp', 'Opening WhatsApp support...')}
-          >
-            <Text style={styles.whatsappText}>WhatsApp Us</Text>
-          </TouchableOpacity>
+        {/* Driver Features */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Driver Features</Text>
+          <Card style={styles.modernCard}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.menuItem,
+                pressed ? styles.menuItemPressed : {}
+              ]}
+              onPress={() => setShowAttendanceModal(true)}
+            >
+              <View style={styles.iconContainer}>
+                <Ionicons name="calendar" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.menuContent}>
+                <Text style={styles.menuLabel}>Attendance Log</Text>
+                <Text style={styles.menuSubtitle}>View your attendance history</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <View style={styles.infoItem}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="bus" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Assigned Bus</Text>
+                <Text style={styles.infoValue}>{assignedBus.licensePlate}</Text>
+                <Text style={styles.infoSubtext}>{assignedBus.route}</Text>
+              </View>
+            </View>
+          </Card>
         </View>
 
-        {/* Logout */}
+        {/* Support Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Support</Text>
+          <Card style={styles.modernCard}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.menuItem,
+                pressed ? styles.menuItemPressed : {}
+              ]}
+              onPress={() => setShowPasswordResetModal(true)}
+            >
+              <View style={styles.iconContainer}>
+                <Ionicons name="lock-closed" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.menuContent}>
+                <Text style={styles.menuLabel}>Change Password</Text>
+                <Text style={styles.menuSubtitle}>Update your account password</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.menuItem,
+                pressed ? styles.menuItemPressed : {}
+              ]}
+              onPress={() => setShowFAQModal(true)}
+            >
+              <View style={styles.iconContainer}>
+                <Ionicons name="help-circle" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.menuContent}>
+                <Text style={styles.menuLabel}>FAQs</Text>
+                <Text style={styles.menuSubtitle}>Get help and support</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.menuItem,
+                pressed ? styles.menuItemPressed : {}
+              ]}
+              onPress={() => Alert.alert('WhatsApp', 'Opening WhatsApp support...')}
+            >
+              <View style={styles.iconContainer}>
+                <Ionicons name="logo-whatsapp" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.menuContent}>
+                <Text style={styles.menuLabel}>WhatsApp Support</Text>
+                <Text style={styles.menuSubtitle}>Contact us directly</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            </Pressable>
+          </Card>
+        </View>
+
+        {/* Logout Button */}
         <View style={styles.logoutSection}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={20} color={colors.error} />
-            <Text style={styles.logoutText}>Sign Out</Text>
-          </TouchableOpacity>
+          <Button
+            title="Logout"
+            onPress={handleLogout}
+            variant="outline"
+            style={styles.logoutButton}
+            icon={<Ionicons name="log-out-outline" size={18} color={colors.primary} />}
+            iconPosition="left"
+          />
         </View>
       </ScrollView>
 
@@ -554,39 +650,7 @@ export default function DriverProfileScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* Language Selection Modal */}
-      <Modal
-        visible={showLanguageModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowLanguageModal(false)}
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
-              <Text style={styles.cancelButton}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Select Language</Text>
-            <View style={{ width: 60 }} />
-          </View>
-
-          <FlatList
-            data={languages}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.languageItem}
-                onPress={() => handleLanguageSelect(item)}
-              >
-                <Text style={styles.languageName}>{item.name}</Text>
-                {selectedLanguage === item.name && (
-                  <Ionicons name="checkmark" size={20} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            )}
-            keyExtractor={(item) => item.code}
-          />
-        </SafeAreaView>
-      </Modal>
+      {/* Language Selection Modal removed - now using LanguageSelector component */}
 
       {/* Attendance Log Modal */}
       <Modal
