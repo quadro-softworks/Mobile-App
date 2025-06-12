@@ -656,6 +656,7 @@ const styles = StyleSheet.create({
   },
   reportsContainer: {
     gap: 12,
+    
   },
   reportCard: {
     backgroundColor: colors.card,
@@ -663,6 +664,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: colors.border,
+    
   },
   reportHeader: {
     flexDirection: 'row',
@@ -882,6 +884,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     marginTop: 20,
+    marginBottom: 20
   },
   infoText: {
     fontSize: 14,
