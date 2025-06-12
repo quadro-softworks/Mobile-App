@@ -428,14 +428,14 @@ export default function RegulatorProfileScreen() {
           </View>
         </View>
 
+          {/* Use the proper LanguageSelector component */}
+          <LanguageSelector />
         {/* Profile Actions */}
         <View style={styles.profileActions}>
           {renderProfileItem('person', 'Personal Information', `${firstName} ${lastName}`, () => setShowEditModal(true))}
           {renderProfileItem('mail', 'Email', email)}
           {renderProfileItem('call', 'Phone', phone)}
 
-          {/* Use the proper LanguageSelector component */}
-          <LanguageSelector />
 
           {renderProfileItem('help-circle', 'FAQ', 'Get Help', () => setShowFAQModal(true))}
           {renderProfileItem('lock-closed', 'Reset Password', 'Change your password', () => setShowPasswordResetModal(true))}
@@ -463,8 +463,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 30,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
   },
   headerContent: {
     flexDirection: 'row',
