@@ -8,7 +8,6 @@ import {
   SafeAreaView,
   Alert,
   Modal,
-  FlatList,
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,14 +16,6 @@ import { LanguageSelector } from '@/components/LanguageSelector';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
 import { router } from 'expo-router';
-
-interface AttendanceRecord {
-  id: string;
-  date: string;
-  checkIn: string;
-  checkOut?: string;
-  status: 'present' | 'absent' | 'late';
-}
 
 interface AssignedStop {
   id: string;
@@ -35,9 +26,6 @@ interface AssignedStop {
 
 export default function RegulatorProfileScreen() {
   const { user, logout, updateProfile, isLoading } = useAuthStore();
-  const { t } = useTranslation();
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
-  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -58,17 +46,6 @@ export default function RegulatorProfileScreen() {
     }
   ]);
 
-  // Language selection is now handled by LanguageSelector component
-
-  // Mock attendance data
-  const mockAttendance: AttendanceRecord[] = [
-    { id: '1', date: '2024-01-15', checkIn: '07:30', checkOut: '17:45', status: 'present' },
-    { id: '2', date: '2024-01-14', checkIn: '07:35', checkOut: '17:50', status: 'late' },
-    { id: '3', date: '2024-01-13', checkIn: '07:25', checkOut: '17:40', status: 'present' },
-    { id: '4', date: '2024-01-12', checkIn: '07:30', checkOut: '17:45', status: 'present' },
-    { id: '5', date: '2024-01-11', checkIn: '08:15', checkOut: '18:00', status: 'late' },
-  ];
-
   const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
   const [showFAQModal, setShowFAQModal] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
@@ -79,7 +56,6 @@ export default function RegulatorProfileScreen() {
   const [isResetting, setIsResetting] = useState(false);
 
   useEffect(() => {
-    setAttendanceRecords(mockAttendance);
     // Initialize form fields with user data
     if (user) {
       const nameParts = user.name.split(' ');
@@ -128,14 +104,7 @@ export default function RegulatorProfileScreen() {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'present': return colors.success;
-      case 'late': return colors.warning;
-      case 'absent': return colors.error;
-      default: return colors.textSecondary;
-    }
-  };
+  // Removed unused status color function
 
   const renderProfileItem = (icon: string, title: string, subtitle: string, onPress?: () => void) => (
     <TouchableOpacity style={styles.profileItem} onPress={onPress}>
@@ -150,20 +119,7 @@ export default function RegulatorProfileScreen() {
     </TouchableOpacity>
   );
 
-  const renderAttendanceItem = ({ item }: { item: AttendanceRecord }) => (
-    <View style={styles.attendanceItem}>
-      <View style={styles.attendanceDate}>
-        <Text style={styles.attendanceDateText}>{item.date}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
-        </View>
-      </View>
-      <View style={styles.attendanceTimes}>
-        <Text style={styles.timeText}>In: {item.checkIn}</Text>
-        <Text style={styles.timeText}>Out: {item.checkOut || 'N/A'}</Text>
-      </View>
-    </View>
-  );
+  // Removed unused attendance functionality
 
   const handlePasswordResetRequest = async () => {
     if (!resetEmail) {
