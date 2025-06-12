@@ -42,8 +42,7 @@ class BusTrackingSocket {
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
   private listeners: Map<string, Function[]> = new Map();
-  private usingFallback = false;
-  private connectionStatus: 'connecting' | 'connected' | 'disconnected' | 'fallback' = 'disconnected';
+  private connectionStatus: 'connecting' | 'connected' | 'disconnected' = 'disconnected';
   private currentEndpointIndex = 0;
   private authToken: string | null = null;
 
@@ -134,7 +133,6 @@ class BusTrackingSocket {
       });
 
       this.connectionStatus = 'connected';
-      this.usingFallback = false;
       this.reconnectAttempts = 0;
       this.emit('connect');
 
@@ -280,27 +278,13 @@ class BusTrackingSocket {
         this.connect();
       }, delay);
     } else {
-      console.error('❌ Max reconnection attempts reached. Using fallback data.');
-      this.useFallbackData();
+      console.error('❌ Max reconnection attempts reached. Staying disconnected.');
+      this.connectionStatus = 'disconnected';
+      this.emit('disconnect');
     }
   }
 
-  private useFallbackData() {
-    // Use the existing mock WebSocket for fallback
-    console.log('📡 Switching to fallback mock data - WebSocket unavailable');
-    console.log('🔄 Real-time updates will use simulated data instead');
-
-    this.connectionStatus = 'fallback';
-    this.usingFallback = true;
-
-    console.log('🔧 Socket status updated to:', this.connectionStatus);
-    console.log('🔧 Using fallback:', this.usingFallback);
-
-    // Emit a fallback event to indicate we're using mock data
-    this.emit('connect'); // Simulate connection for UI purposes
-
-    // This will be handled by the existing mockWebSocket in the store
-  }
+  // Removed fallback data method - only use real-time data
 
   // Subscribe to events
   on<K extends keyof SocketEvents>(event: K, callback: SocketEvents[K]): () => void {
@@ -383,19 +367,18 @@ class BusTrackingSocket {
   }
 
   // Get detailed connection status
-  getConnectionStatus(): 'connecting' | 'connected' | 'disconnected' | 'fallback' {
+  getConnectionStatus(): 'connecting' | 'connected' | 'disconnected' {
     return this.connectionStatus;
   }
 
-  // Check if using fallback data
+  // Check if using fallback data (always false now)
   isUsingFallback(): boolean {
-    return this.usingFallback;
+    return false; // Never use fallback - only real-time data
   }
 
   // Retry connection when auth becomes available
   retryWithAuth() {
     console.log('🔄 Retrying connection with auth...');
-    this.usingFallback = false;
     this.connectionStatus = 'disconnected';
     this.connect();
   }

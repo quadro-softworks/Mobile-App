@@ -13,7 +13,7 @@ interface RealTimeBus extends Bus {
 interface UseRealTimeBusesReturn {
   buses: RealTimeBus[];
   isConnected: boolean;
-  connectionStatus: 'connecting' | 'connected' | 'disconnected' | 'fallback';
+  connectionStatus: 'connecting' | 'connected' | 'disconnected';
   isUsingFallback: boolean;
   joinAreaTracking: (bounds: { north: number; south: number; east: number; west: number }) => void;
   joinBusTracking: (busId: string) => void;
@@ -25,7 +25,7 @@ export function useRealTimeBuses(): UseRealTimeBusesReturn {
   const { token, hasHydrated } = useAuthStore();
   const [realTimeBuses, setRealTimeBuses] = useState<Map<string, RealTimeBus>>(new Map());
   const [isConnected, setIsConnected] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'fallback'>('disconnected');
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected');
   const [isUsingFallback, setIsUsingFallback] = useState(false);
 
   // Initialize buses from store

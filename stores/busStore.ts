@@ -419,36 +419,9 @@ export const useBusStore = create<BusStore>((set, get) => ({
   clearError: () => set({ error: null }),
   
   setupWebSocketListeners: () => {
-    // Listen for bus updates
-    const unsubscribe = mockWebSocket.on('tracking.bus_updates', (updatedBuses: Bus[]) => {
-      set({ buses: updatedBuses });
-      
-      // If there's a selected bus, update it too
-      const selectedBus = get().selectedBus;
-      if (selectedBus) {
-        const updatedBus = updatedBuses.find(b => b.id === selectedBus.id);
-        if (updatedBus) {
-          set({ selectedBus: updatedBus });
-        }
-      }
-      
-      // If there's a selected stop, update approaching buses
-      const selectedStop = get().selectedStop;
-      if (selectedStop && selectedStop.approachingBuses) {
-        const updatedApproachingBuses = selectedStop.approachingBuses.map(bus => {
-          const updatedBus = updatedBuses.find(b => b.id === bus.id);
-          return updatedBus || bus;
-        });
-        
-        set({
-          selectedStop: {
-            ...selectedStop,
-            approachingBuses: updatedApproachingBuses,
-          },
-        });
-      }
-    });
-    
-    return unsubscribe;
+    // Real-time WebSocket listeners are now handled by useRealTimeBuses hook
+    // This method is kept for compatibility but does nothing
+    console.log('📡 Real-time bus tracking handled by useRealTimeBuses hook');
+    return () => {}; // Return empty cleanup function
   },
 }));
