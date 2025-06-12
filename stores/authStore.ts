@@ -103,6 +103,8 @@ export const useAuthStore = create<AuthStore>()(
             isLoading: false
           });
 
+          console.log('✅ Login API call completed');
+
           // Small delay to ensure state is updated before navigation
           await new Promise(resolve => setTimeout(resolve, 100));
         } catch (error) {

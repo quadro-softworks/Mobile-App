@@ -13,25 +13,6 @@ export default function LoginScreen() {
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  // Test functions for quick testing
-  const fillTestRegulator = () => {
-    console.log('🧪 Filling test regulator credentials');
-    setEmail('regulator@test.com');
-    setPassword('password123');
-  };
-
-  const fillTestDriver = () => {
-    console.log('🧪 Filling test driver credentials');
-    setEmail('driver@test.com');
-    setPassword('password123');
-  };
-
-  const fillTestPassenger = () => {
-    console.log('🧪 Filling test passenger credentials');
-    setEmail('passenger@test.com');
-    setPassword('password123');
-  };
-  
   const { login, isLoading, error, clearError } = useAuthStore();
   
   useEffect(() => {
@@ -105,14 +86,14 @@ export default function LoginScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.topImageContainer}>
+        <View style={styles.headerContainer}>
           <Image
             source={require('../../assets/images/anb.jpg')}
-            style={styles.topImage}
+            style={styles.headerBackground}
             resizeMode="cover"
           />
-          <View style={styles.imageOverlay} />
-          <View style={styles.logoOverlayContainer}>
+          <View style={styles.gradientOverlay} />
+          <View style={styles.logoContainer}>
             <Image
               source={require('../../assets/images/logo.png')}
               style={styles.logo}
@@ -121,12 +102,13 @@ export default function LoginScreen() {
           </View>
         </View>
         
-        <View style={styles.formContainer}>
+        <View style={styles.formCard}>
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to continue</Text>
           
           {error && (
             <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={20} color={colors.error} style={styles.errorIcon} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
@@ -139,7 +121,8 @@ export default function LoginScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             error={emailError}
-            leftIcon={<Ionicons name="mail" size={20} color={colors.textSecondary} />}
+            leftIcon={<Ionicons name="mail" size={20} color={colors.primary} />}
+            containerStyle={styles.inputContainer}
           />
           
           <Input
@@ -149,8 +132,13 @@ export default function LoginScreen() {
             onChangeText={setPassword}
             secureTextEntry
             error={passwordError}
-            leftIcon={<Ionicons name="lock-closed" size={20} color={colors.textSecondary} />}
+            leftIcon={<Ionicons name="lock-closed" size={20} color={colors.primary} />}
+            containerStyle={styles.inputContainer}
           />
+          
+          <TouchableOpacity style={styles.forgotPasswordContainer}>
+            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+          </TouchableOpacity>
           
           <Button
             title="Sign In"
@@ -159,6 +147,8 @@ export default function LoginScreen() {
             style={styles.button}
           />
           
+          
+
           <View style={styles.registerContainer}>
             <Text style={styles.registerText}>Don't have an account? </Text>
             <Link href="/register" asChild>
@@ -166,19 +156,6 @@ export default function LoginScreen() {
                 <Text style={styles.registerLink}>Sign Up</Text>
               </TouchableOpacity>
             </Link>
-          </View>
-
-          {/* Test buttons for debugging */}
-          <View style={styles.testButtons}>
-            <TouchableOpacity onPress={fillTestRegulator} style={styles.testButton}>
-              <Text style={styles.testButtonText}>Test Regulator</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={fillTestDriver} style={styles.testButton}>
-              <Text style={styles.testButtonText}>Test Driver</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={fillTestPassenger} style={styles.testButton}>
-              <Text style={styles.testButtonText}>Test Passenger</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -193,31 +170,24 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 40,
   },
-  topImageContainer: {
-    width: '100%',
-    height: 220,
-    overflow: 'hidden',
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    marginBottom: 12,
+  headerContainer: {
+    height: 260,
     position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
+    overflow: 'hidden',
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
   },
-  topImage: {
+  headerBackground: {
     width: '100%',
     height: '100%',
     position: 'absolute',
-    top: 0,
-    left: 0,
   },
-  imageOverlay: {
+  gradientOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.35)', // Less white overlay
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  logoOverlayContainer: {
+  logoContainer: {
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
@@ -226,87 +196,97 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 2,
-    paddingTop: 32,
+    paddingTop: 20,
   },
   logo: {
-    width: 90,
-    height: 90,
-    borderRadius: 20,
-    marginBottom: 10,
-  },
-  appName: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginTop: 8,
-    textAlign: 'center',
+    width: 100,
+    height: 100,
+    borderRadius: 25,
+    marginBottom: 16,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.8)',
   },
   tagline: {
     fontSize: 18,
+    fontWeight: '600',
     color: '#fff',
-    marginTop: 4,
     textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
-  formContainer: {
-    paddingHorizontal: 24,
+  formCard: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    marginTop: -30,
+    paddingTop: 40,
+    paddingHorizontal: 30,
+    paddingBottom: 50,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: 10,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
     color: colors.textSecondary,
-    marginBottom: 24,
+    marginBottom: 30,
+    textAlign: 'center',
   },
   errorContainer: {
     backgroundColor: 'rgba(255, 59, 48, 0.1)',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  errorIcon: {
+    marginRight: 10,
   },
   errorText: {
     color: colors.error,
     fontSize: 14,
+    flex: 1,
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  forgotPasswordContainer: {
+    alignSelf: 'flex-end',
+    marginBottom: 24,
+  },
+  forgotPasswordText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   button: {
-    marginTop: 16,
+    marginTop: 6,
+    borderRadius: 12,
+    height: 55,
+  },
+  dividerText: {
+    paddingHorizontal: 16,
+    color: colors.textSecondary,
+    fontSize: 14,
   },
   registerContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 24,
+    marginTop: 10,
   },
   registerText: {
-    fontSize: 14,
+    fontSize: 15,
     color: colors.textSecondary,
   },
   registerLink: {
-    fontSize: 14,
+    fontSize: 15,
     color: colors.primary,
-    fontWeight: '600',
-  },
-  testButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 20,
-    paddingHorizontal: 10,
-  },
-  testButton: {
-    backgroundColor: colors.secondary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    flex: 1,
-    marginHorizontal: 4,
-  },
-  testButtonText: {
-    color: colors.card,
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
+    fontWeight: 'bold',
   },
 });
