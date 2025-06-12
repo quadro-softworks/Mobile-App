@@ -31,6 +31,7 @@ export default function DriverMapScreen() {
   const [locationSubscription, setLocationSubscription] = useState<any>(null);
   const [isMapFullScreen, setMapFullScreen] = useState(false);
   const [websocket, setWebsocket] = useState<WebSocket | null>(null);
+  const [isNavigatingToLocation, setIsNavigatingToLocation] = useState(false);
   const locationUpdateInterval = useRef<NodeJS.Timeout | null>(null);
   const currentLocationRef = useRef({ lat: 9.0301, lng: 38.7578 }); // Use ref to avoid re-renders
 
@@ -311,9 +312,11 @@ export default function DriverMapScreen() {
     </body>
     </html>`, [busStopsForMap, initialLocation]);
 
-  // Center map on user location
+  // Center map on user location (manual button press)
   const centerOnUserLocation = async () => {
     try {
+      setIsNavigatingToLocation(true);
+
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Required', 'Location permission is required to center on your location.');
@@ -339,9 +342,13 @@ export default function DriverMapScreen() {
           lng: newLocation.lng
         }));
       }
+
+      console.log('📍 Map manually centered on current location:', newLocation);
     } catch (error) {
       console.error('Error getting current location:', error);
       Alert.alert('Location Error', 'Unable to get current location. Please try again.');
+    } finally {
+      setIsNavigatingToLocation(false);
     }
   };
 
@@ -386,12 +393,15 @@ export default function DriverMapScreen() {
     };
   }, [isOnDuty, webViewRef]);
 
-  const toggleDutyStatus = () => {
+  const toggleDutyStatus = async () => {
     const newDutyStatus = !isOnDuty;
     setIsOnDuty(newDutyStatus);
 
     if (newDutyStatus) {
-      Alert.alert('On Duty', 'You are now on duty. Your location will be shared with passengers every 5 seconds.');
+      Alert.alert('On Duty', 'You are now on duty. The map will center on your location and your position will be shared with passengers every 5 seconds.');
+
+      // Navigate to current location when going on duty
+      await navigateToCurrentLocation();
     } else {
       Alert.alert('Off Duty', 'You are now off duty. Location sharing has stopped.');
 
@@ -405,6 +415,46 @@ export default function DriverMapScreen() {
         clearInterval(locationUpdateInterval.current);
         locationUpdateInterval.current = null;
       }
+    }
+  };
+
+  // Navigate to current location when going on duty
+  const navigateToCurrentLocation = async () => {
+    try {
+      setIsNavigatingToLocation(true);
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Location permission is required to center on your location.');
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const newLocation = {
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+      };
+
+      currentLocationRef.current = newLocation;
+
+      // Update map center and driver marker to current location
+      if (webViewRef) {
+        webViewRef.postMessage(JSON.stringify({
+          type: 'centerOnLocation',
+          lat: newLocation.lat,
+          lng: newLocation.lng
+        }));
+      }
+
+      console.log('📍 Map navigated to current location on duty start:', newLocation);
+    } catch (error) {
+      console.error('Error getting current location for duty start:', error);
+      Alert.alert('Location Error', 'Unable to get current location. Using default location.');
+    } finally {
+      setIsNavigatingToLocation(false);
     }
   };
 
@@ -427,6 +477,11 @@ export default function DriverMapScreen() {
           {isOnDuty && (
             <Text style={{ fontSize: 11, color: websocket ? colors.success : colors.warning, marginTop: 2 }}>
               📍 Location updates: {websocket ? 'Active (every 5s)' : 'Connecting...'}
+            </Text>
+          )}
+          {isNavigatingToLocation && (
+            <Text style={{ fontSize: 11, color: colors.primary, marginTop: 2 }}>
+              🧭 Navigating to your location...
             </Text>
           )}
         </View>
@@ -463,8 +518,16 @@ export default function DriverMapScreen() {
           {isMapFullScreen ? <Ionicons name="contract" color={colors.primary} size={24}/> : <Ionicons name="expand" color={colors.primary} size={24}/>}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={centerOnUserLocation} style={styles.locationButton}>
-          <Ionicons name="locate" color={colors.primary} size={24}/>
+        <TouchableOpacity
+          onPress={centerOnUserLocation}
+          style={[styles.locationButton, isNavigatingToLocation && styles.locationButtonActive]}
+          disabled={isNavigatingToLocation}
+        >
+          <Ionicons
+            name={isNavigatingToLocation ? "radio-button-on" : "locate"}
+            color={isNavigatingToLocation ? colors.success : colors.primary}
+            size={24}
+          />
         </TouchableOpacity>
       </View>
 
@@ -540,6 +603,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  locationButtonActive: {
+    backgroundColor: 'rgba(34, 197, 94, 0.1)', // Light green background when active
   },
   mapContainer: {
     flex: 1,
