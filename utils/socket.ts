@@ -25,6 +25,15 @@ interface WebSocketMessage {
   type: string;
   data?: any;
   event?: string;
+  // Real backend format properties
+  bus_id?: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
+  heading?: number;
+  speed?: number;
+  timestamp?: string;
 }
 
 class BusTrackingSocket {
@@ -78,8 +87,8 @@ class BusTrackingSocket {
       });
 
       if (!this.authToken) {
-        console.warn('⚠️ No auth token available, switching to fallback');
-        this.useFallbackData();
+        console.warn('⚠️ No auth token available, cannot connect to real-time data');
+        this.connectionStatus = 'disconnected';
         return;
       }
 
@@ -129,9 +138,9 @@ class BusTrackingSocket {
       this.reconnectAttempts = 0;
       this.emit('connect');
 
-      // Send join message for general bus tracking
-      this.sendMessage('join:general:tracking', { userType: 'passenger' });
-      console.log('🚌 Joined general bus tracking room');
+      // Subscribe to all buses using the real backend format
+      this.sendMessage('subscribe_all_buses', {});
+      console.log('🚌 Subscribed to all bus location updates');
     };
 
     this.socket.onclose = (event) => {
@@ -156,10 +165,9 @@ class BusTrackingSocket {
 
     this.socket.onerror = (error) => {
       console.error('🚨 WEBSOCKET ERROR:', error);
-      console.log('📊 Will use fallback mock data for real-time updates');
+      console.log('📊 Real-time connection failed - no bus data available');
 
-      // Switch to fallback immediately on connection error
-      this.useFallbackData();
+      this.connectionStatus = 'disconnected';
       this.emit('error', error);
     };
 
@@ -175,7 +183,31 @@ class BusTrackingSocket {
         // Handle different message types
         switch (message.type) {
           case 'bus:location:update':
-            const locationData = message.data as BusLocationUpdate;
+          case 'bus_location_update': // Handle real backend format
+            let locationData: BusLocationUpdate;
+
+            if (message.type === 'bus_location_update') {
+              // Convert real backend format to expected format
+              if (message.bus_id && message.location) {
+                locationData = {
+                  busId: message.bus_id,
+                  latitude: message.location.latitude,
+                  longitude: message.location.longitude,
+                  heading: message.heading || 0,
+                  speed: message.speed || 0,
+                  timestamp: message.timestamp || new Date().toISOString(),
+                  status: 'on-time', // Default status, can be enhanced
+                  nextStop: 'Unknown', // Default, can be enhanced
+                  eta: 0 // Default, can be enhanced
+                };
+              } else {
+                console.warn('Invalid bus location update format:', message);
+                break;
+              }
+            } else {
+              locationData = message.data as BusLocationUpdate;
+            }
+
             console.log('📍 BUS LOCATION UPDATE received:', {
               busId: locationData.busId,
               coordinates: { lat: locationData.latitude, lng: locationData.longitude },
@@ -339,8 +371,9 @@ class BusTrackingSocket {
   // Join general area tracking
   joinAreaTracking(bounds: { north: number; south: number; east: number; west: number }) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.sendMessage('join:area:tracking', bounds);
-      console.log('🗺️ Joined area tracking:', bounds);
+      // Use real backend format for area tracking
+      this.sendMessage('subscribe_area_buses', bounds);
+      console.log('🗺️ Subscribed to area bus tracking:', bounds);
     }
   }
 

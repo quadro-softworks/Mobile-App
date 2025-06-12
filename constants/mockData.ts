@@ -24,7 +24,7 @@ export const generateBusStops = (count = 20) => {
 };
 
 // Generate a list of buses
-export const generateBuses = (count = 15) => {
+export const generateBuses = (count = 50) => {
   return Array.from({ length: count }, (_, i) => ({
     id: `bus-${i + 1}`,
     name: `Bus ${i + 1}`,
