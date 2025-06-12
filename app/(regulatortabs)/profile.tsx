@@ -36,7 +36,6 @@ interface AssignedStop {
 export default function RegulatorProfileScreen() {
   const { user, logout, updateProfile, isLoading } = useAuthStore();
   const { t } = useTranslation();
-  const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
@@ -77,6 +76,15 @@ export default function RegulatorProfileScreen() {
     { id: '5', date: '2024-01-11', checkIn: '08:15', checkOut: '18:00', status: 'late' },
   ];
 
+  const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
+  const [showFAQModal, setShowFAQModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetStep, setResetStep] = useState<'email' | 'confirm'>('email');
+  const [isResetting, setIsResetting] = useState(false);
+
   useEffect(() => {
     setAttendanceRecords(mockAttendance);
     // Initialize form fields with user data
@@ -88,19 +96,6 @@ export default function RegulatorProfileScreen() {
       setPhone(user.phone || '');
     }
   }, [user]);
-
-  const handleCheckInOut = () => {
-    const now = new Date();
-    const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    if (!isCheckedIn) {
-      setIsCheckedIn(true);
-      Alert.alert('Check-in Successful', `Checked in at ${timeString}`);
-    } else {
-      setIsCheckedIn(false);
-      Alert.alert('Check-out Successful', `Checked out at ${timeString}`);
-    }
-  };
 
   const handleLogout = async () => {
     Alert.alert(
@@ -181,6 +176,288 @@ export default function RegulatorProfileScreen() {
     </View>
   );
 
+  const handlePasswordResetRequest = async () => {
+    if (!resetEmail) {
+      Alert.alert('Error', 'Please enter your email address');
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      const response = await fetch('https://guzosync-fastapi.onrender.com/api/accounts/password/reset/request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: resetEmail }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to send reset email');
+      }
+
+      Alert.alert(
+        'Reset Email Sent',
+        'Please check your email for password reset instructions',
+        [
+          {
+            text: 'OK',
+            onPress: () => setResetStep('confirm'),
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', (error as Error).message);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const handlePasswordResetConfirm = async () => {
+    if (!resetToken || !newPassword || !confirmPassword) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters long');
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      const response = await fetch('https://guzosync-fastapi.onrender.com/api/accounts/password/reset/confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token: resetToken,
+          new_password: newPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to reset password');
+      }
+
+      Alert.alert(
+        'Password Reset Successful',
+        'Your password has been reset successfully. Please login with your new password.',
+        [
+          {
+            text: 'OK',
+            onPress: () => setShowPasswordResetModal(false),
+          },
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Error', (error as Error).message);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  const renderFAQModal = () => (
+    <Modal
+      visible={showFAQModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowFAQModal(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Frequently Asked Questions</Text>
+          {/* Add FAQ content here */}
+          <TouchableOpacity 
+            style={styles.closeButton} 
+            onPress={() => setShowFAQModal(false)}
+          >
+            <Text style={styles.closeButtonText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderPasswordResetModal = () => (
+    <Modal
+      visible={showPasswordResetModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowPasswordResetModal(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Reset Password</Text>
+          {resetStep === 'email' ? (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your email"
+                value={resetEmail}
+                onChangeText={setResetEmail}
+                keyboardType="email-address"
+              />
+              <TouchableOpacity 
+                style={styles.primaryButton} 
+                onPress={handlePasswordResetRequest}
+                disabled={isResetting}
+              >
+                {isResetting ? (
+                  <Text>Loading...</Text>
+                ) : (
+                  <Text style={styles.primaryButtonText}>Send Reset Link</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="Reset Token"
+                value={resetToken}
+                onChangeText={setResetToken}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="New Password"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Confirm New Password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry
+              />
+              <TouchableOpacity 
+                style={styles.primaryButton} 
+                onPress={handlePasswordResetConfirm}
+                disabled={isResetting}
+              >
+                {isResetting ? (
+                  <Text>Loading...</Text>
+                ) : (
+                  <Text style={styles.primaryButtonText}>Reset Password</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+          <TouchableOpacity 
+            style={styles.closeButton} 
+            onPress={() => setShowPasswordResetModal(false)}
+          >
+            <Text style={styles.closeButtonText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderLanguageModal = () => (
+    <Modal
+      visible={showLanguageModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowLanguageModal(false)}
+    >
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
+            <Text style={styles.cancelButton}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>Select Language</Text>
+          <View style={{ width: 60 }} />
+        </View>
+
+        <FlatList
+          data={languages}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.languageItem}
+              onPress={() => handleLanguageSelect(item)}
+            >
+              <Text style={styles.languageName}>{item.name}</Text>
+              {selectedLanguage === item.name && (
+                <Ionicons name="checkmark" size={20} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+          )}
+          keyExtractor={(item) => item.code}
+        />
+      </SafeAreaView>
+    </Modal>
+  );
+
+  const renderEditProfileModal = () => (
+    <Modal
+      visible={showEditModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowEditModal(false)}
+    >
+      <SafeAreaView style={styles.editModalContainer}>
+        <View style={styles.editModalHeader}>
+          <TouchableOpacity onPress={() => setShowEditModal(false)}>
+            <Text style={styles.cancelButton}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={styles.editModalTitle}>Edit Profile</Text>
+          <TouchableOpacity onPress={handleSaveProfile} disabled={isLoading}>
+            <Text style={[styles.cancelButton, { color: colors.primary }]}>
+              {isLoading ? 'Saving...' : 'Save'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView style={styles.editModalContent}>
+          <Text style={styles.editFormLabel}>First Name</Text>
+          <TextInput
+            style={styles.editFormInput}
+            value={firstName}
+            onChangeText={setFirstName}
+            placeholder="Enter first name"
+          />
+
+          <Text style={styles.editFormLabel}>Last Name</Text>
+          <TextInput
+            style={styles.editFormInput}
+            value={lastName}
+            onChangeText={setLastName}
+            placeholder="Enter last name"
+          />
+
+          <Text style={styles.editFormLabel}>Email</Text>
+          <TextInput
+            style={styles.editFormInput}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Enter email"
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+
+          <Text style={styles.editFormLabel}>Phone Number</Text>
+          <TextInput
+            style={styles.editFormInput}
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="Enter phone number"
+            keyboardType="phone-pad"
+          />
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -199,250 +476,52 @@ export default function RegulatorProfileScreen() {
               </TouchableOpacity>
             </View>
             <View style={styles.headerInfo}>
-              <Text style={styles.userName}>{user?.name || 'Regulator Name'}</Text>
-              <Text style={styles.userRole}>Queue Regulator</Text>
-              <Text style={styles.userId}>ID: REG001</Text>
+              <Text style={styles.profileName}>{`${firstName} ${lastName}`}</Text>
+              <Text style={styles.profileRole}>Regulator</Text>
             </View>
           </View>
         </View>
 
-        {/* Quick Stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Ionicons name="location" size={24} color={colors.primary} />
-            <Text style={styles.statNumber}>{assignedStops.length}</Text>
-            <Text style={styles.statLabel}>Assigned Stops</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="time" size={24} color={colors.success} />
-            <Text style={styles.statNumber}>96%</Text>
-            <Text style={styles.statLabel}>Efficiency</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="people" size={24} color={colors.warning} />
-            <Text style={styles.statNumber}>1.2k</Text>
-            <Text style={styles.statLabel}>Daily Passengers</Text>
-          </View>
-        </View>
-
-        {/* Personal Information */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personal Information</Text>
-          <View style={styles.infoCard}>
-            <View style={styles.infoRow}>
-              <View style={styles.infoIconContainer}>
-                <Ionicons name="mail" size={20} color={colors.primary} />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Email</Text>
-                <Text style={styles.infoValue}>{user?.email || 'regulator@example.com'}</Text>
-              </View>
-            </View>
-            <View style={styles.infoRow}>
-              <View style={styles.infoIconContainer}>
-                <Ionicons name="call" size={20} color={colors.primary} />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Phone</Text>
-                <Text style={styles.infoValue}>{user?.phone || 'No phone number'}</Text>
-              </View>
-            </View>
-          </View>
+        {/* Profile Actions */}
+        <View style={styles.profileActions}>
+          {renderProfileItem('person', 'Personal Information', `${firstName} ${lastName}`, () => setShowEditModal(true))}
+          {renderProfileItem('mail', 'Email', email)}
+          {renderProfileItem('call', 'Phone', phone)}
+          {renderProfileItem('language', 'Language', selectedLanguage, () => setShowLanguageModal(true))}
+          {renderProfileItem('help-circle', 'FAQ', 'Get Help', () => setShowFAQModal(true))}
+          {renderProfileItem('lock-closed', 'Reset Password', 'Change your password', () => setShowPasswordResetModal(true))}
+          {renderProfileItem('log-out', 'Logout', 'Sign out of your account', handleLogout)}
         </View>
 
         {/* Assigned Stops */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Assigned Bus Stops</Text>
-          {assignedStops.map((stop, index) => (
-            <View key={stop.id} style={styles.stopCard}>
-              <View style={styles.stopHeader}>
-                <View style={styles.stopIconContainer}>
-                  <Ionicons name="location" size={28} color={colors.card} />
-                </View>
-                <View style={styles.stopInfo}>
-                  <Text style={styles.stopName}>{stop.name}</Text>
-                  <Text style={styles.stopLocation}>{stop.location}</Text>
-                </View>
-              </View>
-              <View style={styles.routesContainer}>
-                <Text style={styles.routesLabel}>Active Routes:</Text>
-                <View style={styles.routesList}>
-                  {stop.routes.map((route, routeIndex) => (
-                    <View key={routeIndex} style={styles.routeBadge}>
-                      <Text style={styles.routeText}>{route}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Assigned Stops</Text>
+          {assignedStops.map((stop) => (
+            <View key={stop.id} style={styles.assignedStopItem}>
+              <Text style={styles.assignedStopName}>{stop.name}</Text>
+              <Text style={styles.assignedStopDetails}>{stop.location}</Text>
+              <Text style={styles.assignedStopRoutes}>Routes: {stop.routes.join(', ')}</Text>
             </View>
           ))}
         </View>
 
-        {/* Attendance */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Attendance</Text>
-          <View style={styles.attendanceCard}>
-            <TouchableOpacity
-              style={styles.viewLogButton}
-              onPress={() => setShowAttendanceModal(true)}
-            >
-              <View style={styles.attendanceInfo}>
-                <Ionicons name="calendar-outline" size={24} color={colors.primary} />
-                <View style={styles.attendanceText}>
-                  <Text style={styles.attendanceTitle}>View Attendance Log</Text>
-                  <Text style={styles.attendanceSubtitle}>Check your attendance history</Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Settings */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Settings</Text>
-          <View style={styles.settingsCard}>
-            <LanguageSelector />
-            {renderProfileItem(
-              'help-circle',
-              'Help & Support',
-              'Contact support team',
-              () => Alert.alert('Support', 'Contact: +251-11-123-4567\nEmail: support@guzosync.com')
-            )}
-            {renderProfileItem(
-              'information-circle',
-              'App Version',
-              'v1.0.0',
-            )}
-          </View>
-        </View>
-
-        {/* Logout */}
-        <View style={styles.section}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out" size={24} color={colors.error} />
-            <Text style={styles.logoutText}>Sign Out</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      {/* Language Selection Modal */}
-      <Modal
-        visible={showLanguageModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowLanguageModal(false)}
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowLanguageModal(false)}>
-              <Text style={styles.cancelButton}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Select Language</Text>
-            <View style={{ width: 60 }} />
-          </View>
-
-          <FlatList
-            data={languages}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.languageItem}
-                onPress={() => handleLanguageSelect(item)}
-              >
-                <Text style={styles.languageName}>{item.name}</Text>
-                {selectedLanguage === item.name && (
-                  <Ionicons name="checkmark" size={20} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            )}
-            keyExtractor={(item) => item.code}
-          />
-        </SafeAreaView>
-      </Modal>
-
-      {/* Attendance Log Modal */}
-      <Modal
-        visible={showAttendanceModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowAttendanceModal(false)}
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowAttendanceModal(false)}>
-              <Text style={styles.cancelButton}>Close</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Attendance Log</Text>
-            <View style={{ width: 60 }} />
-          </View>
-
+        {/* Attendance Records */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Attendance Records</Text>
           <FlatList
             data={attendanceRecords}
             renderItem={renderAttendanceItem}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.attendanceList}
+            scrollEnabled={false}
           />
-        </SafeAreaView>
-      </Modal>
+        </View>
 
-      {/* Edit Profile Modal */}
-      <Modal
-        visible={showEditModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowEditModal(false)}
-      >
-        <SafeAreaView style={styles.editModalContainer}>
-          <View style={styles.editModalHeader}>
-            <TouchableOpacity onPress={() => setShowEditModal(false)}>
-              <Text style={styles.cancelButton}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.editModalTitle}>Edit Profile</Text>
-            <TouchableOpacity onPress={handleSaveProfile} disabled={isLoading}>
-              <Text style={[styles.cancelButton, { color: colors.primary }]}>
-                {isLoading ? 'Saving...' : 'Save'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.editModalContent}>
-            <Text style={styles.editFormLabel}>First Name</Text>
-            <TextInput
-              style={styles.editFormInput}
-              value={firstName}
-              onChangeText={setFirstName}
-              placeholder="Enter first name"
-            />
-
-            <Text style={styles.editFormLabel}>Last Name</Text>
-            <TextInput
-              style={styles.editFormInput}
-              value={lastName}
-              onChangeText={setLastName}
-              placeholder="Enter last name"
-            />
-
-            <Text style={styles.editFormLabel}>Email</Text>
-            <TextInput
-              style={styles.editFormInput}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Enter email"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-
-            <Text style={styles.editFormLabel}>Phone Number</Text>
-            <TextInput
-              style={styles.editFormInput}
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="Enter phone number"
-              keyboardType="phone-pad"
-            />
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
+        {/* Modals */}
+        {renderLanguageModal()}
+        {renderEditProfileModal()}
+        {renderPasswordResetModal()}
+        {renderFAQModal()}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -497,231 +576,21 @@ const styles = StyleSheet.create({
   headerInfo: {
     flex: 1,
   },
-  userName: {
+  profileName: {
     fontSize: 24,
     fontWeight: 'bold',
     color: colors.card,
     marginBottom: 4,
   },
-  userRole: {
+  profileRole: {
     fontSize: 16,
     color: 'rgba(255, 255, 255, 0.9)',
     marginBottom: 2,
   },
-  userId: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  statsContainer: {
-    flexDirection: 'row',
+  profileActions: {
     paddingHorizontal: 20,
     paddingVertical: 20,
-    gap: 12,
   },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  section: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  infoCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  infoIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  infoValue: {
-    fontSize: 16,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  stopCard: {
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  stopHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  stopIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  stopInfo: {
-    flex: 1,
-  },
-  stopName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.card,
-    marginBottom: 4,
-  },
-  stopLocation: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  routesContainer: {
-    gap: 8,
-  },
-  routesLabel: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '600',
-  },
-  routesList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  routeBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  routeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.card,
-  },
-  attendanceCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  attendanceInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  attendanceText: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  attendanceTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  attendanceSubtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  settingsCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  logoutButton: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: colors.error,
-  },
-  logoutText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.error,
-    marginLeft: 12,
-  },
-  viewLogButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-  },
-
   profileItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -749,43 +618,41 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
   },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
+  sectionContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 16,
   },
-  cancelButton: {
-    fontSize: 16,
-    color: colors.primary,
+  assignedStopItem: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  modalTitle: {
+  assignedStopName: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: colors.text,
+    marginBottom: 4,
   },
-  languageItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+  assignedStopDetails: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 8,
   },
-  languageName: {
-    fontSize: 16,
-    color: colors.text,
-  },
-  attendanceList: {
-    padding: 16,
+  assignedStopRoutes: {
+    fontSize: 14,
+    color: colors.textSecondary,
   },
   attendanceItem: {
     backgroundColor: colors.card,
@@ -824,29 +691,100 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
   },
-  sectionHeader: {
+  checkInOutButton: {
+    backgroundColor: colors.success,
+    borderRadius: 16,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: colors.success,
+  },
+  checkInOutButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.card,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 20,
+    marginVertical: 100,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 16,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+  },
+  closeButtonText: {
+    fontSize: 16,
+    color: colors.primary,
+  },
+  input: {
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  primaryButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.card,
+  },
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: colors.highlight,
-    borderRadius: 16,
-    gap: 4,
-  },
-  editButtonText: {
-    fontSize: 14,
+  cancelButton: {
+    fontSize: 16,
     color: colors.primary,
-    fontWeight: '500',
   },
-  regulatorPhone: {
-    fontSize: 14,
-    color: colors.textSecondary,
+  languageItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  languageName: {
+    fontSize: 16,
+    color: colors.text,
   },
   editModalContainer: {
     flex: 1,
@@ -885,14 +823,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     fontSize: 16,
-  },
-  editFormButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 24,
-  },
-  editFormButton: {
-    flex: 1,
   },
 });
