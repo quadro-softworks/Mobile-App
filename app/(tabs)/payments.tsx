@@ -47,11 +47,17 @@ const QRCodeComponent: React.FC<{ value: string; size?: number }> = ({ value, si
   );
 };
 
-// Chapa Payment Interface
-interface ChapaPaymentResponse {
-  checkout_url: string;
-  tx_ref: string;
-  status: string;
+// Payment API Interface
+interface PaymentInitiateRequest {
+  amount: number;
+  phone_number: string;
+  bookingId: string;
+  callback_url: string;
+}
+
+interface PaymentInitiateResponse {
+  checkoutUrl: string;
+  amount: number;
 }
 
 // Mock ticket data
@@ -190,10 +196,67 @@ export default function PaymentsScreen() {
     setShowDestinationSuggestions(false);
   };
   
-  // Simulate Chapa checkout URL generation
-  const generateChapaCheckoutUrl = (origin: string, destination: string, price: number): string => {
-    const txRef = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-    return `https://checkout.chapa.co/checkout/payment/${txRef}?amount=${price}&currency=ETB&email=${user?.email}&first_name=${user?.name?.split(' ')[0]}&last_name=${user?.name?.split(' ')[1] || ''}&phone_number=${user?.phone || ''}&tx_ref=${txRef}&callback_url=https://guzosync.app/payment/callback&return_url=https://guzosync.app/payment/success&customization[title]=GuzoSync Bus Ticket&customization[description]=Bus ticket from ${origin} to ${destination}`;
+  // Generate payment checkout URL using API
+  const initiatePayment = async (origin: string, destination: string, price: number): Promise<PaymentInitiateResponse> => {
+    const { token } = useAuthStore.getState();
+
+    if (!token) {
+      throw new Error('Authentication required. Please log in again.');
+    }
+
+    if (!user?.phone) {
+      throw new Error('Phone number is required for payment. Please update your profile.');
+    }
+
+    const bookingId = `booking_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    const callbackUrl = 'https://guzosync.app/payment/callback';
+
+    const paymentRequest: PaymentInitiateRequest = {
+      amount: price,
+      phone_number: user.phone,
+      bookingId: bookingId,
+      callback_url: callbackUrl,
+    };
+
+    console.log('Initiating payment with:', paymentRequest);
+
+    const response = await fetch('https://guzosync-fastapi.onrender.com/api/payments/initiate-simple', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(paymentRequest),
+    });
+
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+
+      try {
+        const errorData = await response.json();
+        console.error('Payment API Error:', errorData);
+
+        if (errorData.detail) {
+          if (Array.isArray(errorData.detail)) {
+            const validationErrors = errorData.detail.map((err: any) =>
+              `${err.loc?.join('.')} - ${err.msg}`
+            ).join(', ');
+            errorMessage = `Validation Error: ${validationErrors}`;
+          } else if (typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
+          }
+        }
+      } catch (parseError) {
+        console.error('Failed to parse payment error response:', parseError);
+      }
+
+      throw new Error(errorMessage);
+    }
+
+    const paymentResponse: PaymentInitiateResponse = await response.json();
+    console.log('Payment initiated successfully:', paymentResponse);
+
+    return paymentResponse;
   };
 
   const handlePayForRoute = async () => {
@@ -207,20 +270,30 @@ export default function PaymentsScreen() {
       return;
     }
 
+    if (!user?.phone) {
+      Alert.alert('Error', 'Phone number is required for payment. Please update your profile.');
+      return;
+    }
+
     setIsProcessing(true);
     setPaymentStep('checkout');
     setShowPaymentModal(true);
 
     try {
-      // Step 1: Generate checkout URL (simulate backend call)
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      const url = generateChapaCheckoutUrl(origin, destination, routePrice);
-      setCheckoutUrl(url);
+      // Step 1: Initiate payment and get checkout URL from API
+      console.log('Initiating payment for route:', { origin, destination, price: routePrice });
+      const paymentResponse = await initiatePayment(origin, destination, routePrice);
+
+      setCheckoutUrl(paymentResponse.checkoutUrl);
       setPaymentStep('external');
       setIsProcessing(false);
 
+      console.log('Payment checkout URL received:', paymentResponse.checkoutUrl);
+
     } catch (error) {
-      Alert.alert('Error', 'Failed to generate checkout URL. Please try again.');
+      console.error('Payment initiation error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to initiate payment. Please try again.';
+      Alert.alert('Payment Error', errorMessage);
       setShowPaymentModal(false);
       setPaymentStep('checkout');
       setIsProcessing(false);
@@ -380,7 +453,7 @@ export default function PaymentsScreen() {
           >
             <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.modalTitle}>Chapa Payment</Text>
+          <Text style={styles.modalTitle}>Payment</Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -388,9 +461,9 @@ export default function PaymentsScreen() {
           {paymentStep === 'checkout' && (
             <View style={styles.processingContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.processingTitle}>Generating Checkout URL</Text>
+              <Text style={styles.processingTitle}>Initiating Payment</Text>
               <Text style={styles.processingText}>
-                Creating secure Chapa payment link...
+                Creating secure payment link...
               </Text>
             </View>
           )}
@@ -402,25 +475,28 @@ export default function PaymentsScreen() {
               </View>
               <Text style={styles.checkoutTitle}>Complete Payment</Text>
               <Text style={styles.checkoutText}>
-                Click the button below to open Chapa payment page and complete your transaction.
+                Click the button below to open the payment page and complete your transaction.
               </Text>
 
               <TouchableOpacity
                 style={styles.checkoutUrlButton}
                 onPress={() => {
                   Alert.alert(
-                    'Chapa Payment',
-                    'This will open the Chapa payment page in your browser. Complete the payment and return to the app.',
+                    'Payment',
+                    'This will open the payment page in your browser. Complete the payment and return to the app.',
                     [
                       {
                         text: 'Open Payment Page',
                         onPress: () => {
-                          // In real app: Linking.openURL(checkoutUrl)
-                          console.log('Opening Chapa checkout:', checkoutUrl);
-                          // Simulate external payment completion
-                          setTimeout(() => {
-                            handleExternalPaymentComplete();
-                          }, 3000);
+                          // Open the actual checkout URL
+                          console.log('Opening payment checkout:', checkoutUrl);
+                          if (checkoutUrl) {
+                            // In real app: Linking.openURL(checkoutUrl)
+                            // For now, simulate external payment completion
+                            setTimeout(() => {
+                              handleExternalPaymentComplete();
+                            }, 3000);
+                          }
                         }
                       },
                       { text: 'Cancel', style: 'cancel' }

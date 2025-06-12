@@ -16,6 +16,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
+import { useIncidentStore } from '@/stores/incidentStore';
+import { useBusStore } from '@/stores/busStore';
+import { useWebSocketNotifications } from '@/hooks/useWebSocketNotifications';
+import { CreateIncidentRequest, IncidentLocation } from '@/services/incidentApi';
+import { Bus, Route } from '@/types';
 import * as Location from 'expo-location';
 
 // API Types based on the endpoint schema
@@ -64,16 +69,52 @@ export default function RequestsScreen() {
   const { user, token } = useAuthStore();
   const { t } = useTranslation();
 
-  const [requests, setRequests] = useState<IssueResponse[]>([]);
+  // Store hooks - using incident store like driver report
+  const { reportIncident, fetchUserIncidents, incidents, isLoading: incidentLoading, error: incidentError } = useIncidentStore();
+  const { buses, routes, fetchBuses, fetchRoutes } = useBusStore();
+
+  // WebSocket for real-time incident reporting
+  const { sendIncidentReport, isConnected, connectionStatus } = useWebSocketNotifications({
+    onIncidentReported: (incident) => {
+      console.log('🚨 Regulator incident reported via WebSocket:', incident.title);
+      // Refresh incidents list when new incident is reported
+      fetchUserIncidents();
+    }
+  });
+
+  // State management
   const [selectedRequestType, setSelectedRequestType] = useState<RequestType | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [requestDescription, setRequestDescription] = useState('');
   const [passengerCount, setPassengerCount] = useState('');
-  const [busId, setBusId] = useState('');
-  const [routeId, setRouteId] = useState('');
-  const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
+  const [selectedBus, setSelectedBus] = useState<Bus | null>(null);
+  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<IncidentLocation | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [isRefreshingReports, setIsRefreshingReports] = useState(false);
+
+  // Real-time status monitoring
+  const [realTimeStatus, setRealTimeStatus] = useState<'Active' | 'Connecting' | 'Offline'>('Offline');
+
+  useEffect(() => {
+    const updateStatus = () => {
+      if (isConnected) {
+        setRealTimeStatus('Active');
+      } else if (connectionStatus === 'connecting') {
+        setRealTimeStatus('Connecting');
+      } else {
+        setRealTimeStatus('Offline');
+      }
+    };
+
+    updateStatus();
+
+    // Check status every 2 seconds
+    const statusInterval = setInterval(updateStatus, 2000);
+
+    return () => clearInterval(statusInterval);
+  }, [isConnected, connectionStatus]);
 
   const requestTypes: RequestType[] = [
     {
@@ -126,9 +167,12 @@ export default function RequestsScreen() {
     },
   ];
 
-  // Get current location on component mount
+  // Initialize data on component mount
   useEffect(() => {
     getCurrentLocation();
+    fetchUserIncidents();
+    fetchBuses();
+    fetchRoutes();
   }, []);
 
   const getCurrentLocation = async () => {
@@ -153,6 +197,17 @@ export default function RequestsScreen() {
       Alert.alert('Error', 'Failed to get your location. Please try again.');
     } finally {
       setIsLoadingLocation(false);
+    }
+  };
+
+  const refreshReports = async () => {
+    setIsRefreshingReports(true);
+    try {
+      await fetchUserIncidents();
+    } catch (error) {
+      console.error('Error refreshing reports:', error);
+    } finally {
+      setIsRefreshingReports(false);
     }
   };
 
@@ -194,79 +249,71 @@ export default function RequestsScreen() {
         description = `[${selectedRequestType.title}] ${description}`;
       }
 
-      const issueReport: IssueReport = {
-        description,
-        incident_type: apiIncidentType,
-        location: currentLocation,
-        severity: selectedRequestType.severity,
-        ...(busId.trim() && { related_bus_id: busId.trim() }),
-        ...(routeId.trim() && { related_route_id: routeId.trim() }),
+      // Map incident types to match the API schema
+      const mapIncidentType = (type: IncidentType): "VEHICLE_ISSUE" | "PASSENGER_INCIDENT" | "ROUTE_PROBLEM" | "SCHEDULE_DELAY" | "OTHER" => {
+        switch (type) {
+          case 'VEHICLE_ISSUE': return 'VEHICLE_ISSUE';
+          case 'PASSENGER_INCIDENT': return 'PASSENGER_INCIDENT';
+          case 'ROUTE_DISRUPTION': return 'ROUTE_PROBLEM';
+          case 'INFRASTRUCTURE_ISSUE': return 'OTHER';
+          case 'OVERCROWDING': return 'PASSENGER_INCIDENT';
+          case 'SAFETY_CONCERN': return 'OTHER';
+          default: return 'OTHER';
+        }
       };
 
-      console.log('Submitting issue report:', JSON.stringify(issueReport, null, 2));
-      console.log('Auth token present:', !!token);
-      console.log('Auth token length:', token?.length);
-
-      // Validate the payload
-      if (!issueReport.description || issueReport.description.length < 10) {
-        throw new Error('Description must be at least 10 characters long');
-      }
-
-      if (!issueReport.location || typeof issueReport.location.latitude !== 'number' || typeof issueReport.location.longitude !== 'number') {
-        throw new Error('Valid location is required');
-      }
-
-      if (!['VEHICLE_ISSUE', 'ROUTE_DISRUPTION', 'PASSENGER_INCIDENT', 'INFRASTRUCTURE_ISSUE', 'OVERCROWDING', 'SAFETY_CONCERN'].includes(issueReport.incident_type)) {
-        throw new Error('Invalid incident type');
-      }
-
-      if (!['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(issueReport.severity)) {
-        throw new Error('Invalid severity level');
-      }
-
-      const response = await fetch('https://guzosync-fastapi.onrender.com/api/issues/report', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(issueReport),
-      });
-
-      console.log('API Response status:', response.status);
-      console.log('API Response headers:', response.headers);
-
-      if (!response.ok) {
-        if (response.status === 422) {
-          const errorData = await response.json();
-          console.log('Validation Error response:', errorData);
-
-          if (errorData.detail && Array.isArray(errorData.detail)) {
-            const validationErrors = errorData.detail
-              .map((err: any) => `${err.loc?.join('.')} - ${err.msg}`)
-              .join(', ');
-            throw new Error(`Validation Error: ${validationErrors}`);
-          }
+      // Map severity to match API schema
+      const mapSeverity = (severity: SeverityLevel): "LOW" | "MEDIUM" | "HIGH" => {
+        switch (severity) {
+          case 'LOW': return 'LOW';
+          case 'MEDIUM': return 'MEDIUM';
+          case 'HIGH': return 'HIGH';
+          case 'CRITICAL': return 'HIGH'; // Map CRITICAL to HIGH
+          default: return 'MEDIUM';
         }
+      };
 
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      // Create incident data using the same structure as driver report
+      // Note: API only accepts 'VEHICLE_ISSUE' but we include the actual type in description
+      const incidentData: CreateIncidentRequest = {
+        description,
+        incident_type: 'VEHICLE_ISSUE', // API constraint - actual type is in description
+        location: currentLocation,
+        severity: mapSeverity(selectedRequestType.severity),
+        ...(selectedBus && { related_bus_id: selectedBus.id }),
+        ...(selectedRoute && { related_route_id: selectedRoute.id }),
+      };
+
+      console.log('🚨 Regulator submitting incident:', incidentData);
+
+      // Submit via API using incident store
+      await reportIncident(incidentData);
+
+      // Also send via WebSocket for real-time notifications
+      if (isConnected) {
+        sendIncidentReport({
+          description: description,
+          incident_type: mapIncidentType(selectedRequestType.id),
+          severity: mapSeverity(selectedRequestType.severity),
+          location: currentLocation,
+          ...(selectedBus && { related_bus_id: selectedBus.id }),
+          ...(selectedRoute && { related_route_id: selectedRoute.id }),
+        });
+        console.log('🚨 Regulator incident also sent via WebSocket for real-time notifications');
       }
-
-      const newIssue: IssueResponse = await response.json();
-      console.log('Issue submitted successfully:', newIssue);
-
-      // Add to local state
-      setRequests(prev => [newIssue, ...prev]);
 
       // Reset form
       setSelectedRequestType(null);
       setRequestDescription('');
       setPassengerCount('');
-      setBusId('');
-      setRouteId('');
+      setSelectedBus(null);
+      setSelectedRoute(null);
       setIsModalVisible(false);
 
       Alert.alert('Success', 'Issue reported successfully. You will be notified when it is resolved.');
+
+      // Refresh the incidents list
+      await fetchUserIncidents();
     } catch (error) {
       console.error('Error submitting request:', error);
       console.error('Error type:', typeof error);
@@ -432,19 +479,125 @@ export default function RequestsScreen() {
           </View>
         </View>
 
-        {requests.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Request History</Text>
-            <Text style={styles.sectionSubtitle}>Your submitted reports and their status</Text>
+        {/* Reports History Section */}
+        <View style={styles.section}>
+          <View style={styles.reportsHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>Report History</Text>
+              <Text style={styles.sectionSubtitle}>
+                {incidents.length > 0
+                  ? `${incidents.length} report${incidents.length === 1 ? '' : 's'} submitted`
+                  : 'No reports submitted yet'
+                }
+              </Text>
+              <Text style={[styles.connectionStatus, { color: realTimeStatus === 'Active' ? colors.success : realTimeStatus === 'Connecting' ? colors.warning : colors.error }]}>
+                📡 Real-time reporting: {realTimeStatus}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={styles.refreshButton}
+                onPress={() => {
+                  console.log('🔄 Force reconnecting WebSocket...');
+                  const { busTrackingSocket } = require('@/utils/socket');
+                  busTrackingSocket.forceReconnect();
+                }}
+              >
+                <Text style={{ fontSize: 10, color: colors.primary }}>RECONNECT</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.refreshButton, { opacity: isRefreshingReports ? 0.6 : 1 }]}
+                onPress={refreshReports}
+                disabled={isRefreshingReports}
+              >
+                {isRefreshingReports ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={{ fontSize: 10, color: colors.primary }}>REFRESH</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
 
+          {incidents.length > 0 ? (
             <FlatList
-              data={requests}
-              renderItem={renderRequest}
+              data={incidents}
+              renderItem={({ item }) => (
+                <View style={styles.requestCard}>
+                  <View style={styles.requestHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.requestTitle}>{getIncidentTypeTitle(item.incident_type)}</Text>
+                      <View style={styles.severityContainer}>
+                        <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(item.severity) }]}>
+                          <Text style={styles.severityText}>{item.severity}</Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.is_resolved) }]}>
+                      <Text style={styles.statusText}>{getStatusText(item.is_resolved)}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.requestDescription}>{item.description}</Text>
+
+                  {/* Location info */}
+                  {item.location && (
+                    <View style={styles.locationContainer}>
+                      <Ionicons name="location" size={14} color={colors.textSecondary} />
+                      <Text style={styles.locationText}>
+                        {item.location.latitude.toFixed(6)}, {item.location.longitude.toFixed(6)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Related bus/route info */}
+                  {(item.related_bus_id || item.related_route_id) && (
+                    <View style={styles.relatedInfoContainer}>
+                      {item.related_bus_id && (
+                        <View style={styles.relatedInfo}>
+                          <Ionicons name="bus" size={14} color={colors.textSecondary} />
+                          <Text style={styles.relatedInfoText}>Bus: {item.related_bus_id}</Text>
+                        </View>
+                      )}
+                      {item.related_route_id && (
+                        <View style={styles.relatedInfo}>
+                          <Ionicons name="map" size={14} color={colors.textSecondary} />
+                          <Text style={styles.relatedInfoText}>Route: {item.related_route_id}</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Resolution notes */}
+                  {item.resolution_notes && (
+                    <View style={styles.responseContainer}>
+                      <Text style={styles.responseLabel}>Resolution:</Text>
+                      <Text style={styles.responseText}>{item.resolution_notes}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.timestampContainer}>
+                    <Text style={styles.requestTimestamp}>
+                      Reported: {formatDate(item.created_at)}
+                    </Text>
+                    {item.updated_at !== item.created_at && (
+                      <Text style={styles.requestTimestamp}>
+                        Updated: {formatDate(item.updated_at)}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              )}
               keyExtractor={(item) => item.id}
               scrollEnabled={false}
             />
-          </View>
-        )}
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons name="document-text-outline" size={48} color={colors.textSecondary} />
+              <Text style={styles.emptyStateText}>No reports yet</Text>
+              <Text style={styles.emptyStateSubtext}>Submit your first incident report above</Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
 
       {/* Request Modal */}
@@ -501,30 +654,62 @@ export default function RequestsScreen() {
               </View>
             )}
 
-            {/* Optional Bus ID field */}
+            {/* Optional Bus selection */}
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Related Bus ID (Optional)</Text>
-              <TextInput
+              <Text style={styles.inputLabel}>Related Bus (Optional)</Text>
+              <TouchableOpacity
                 style={styles.textInput}
-                placeholder="e.g., BUS001"
-                placeholderTextColor={colors.textSecondary + '80'}
-                value={busId}
-                onChangeText={setBusId}
-                maxLength={20}
-              />
+                onPress={() => {
+                  // Simple bus selection - could be enhanced with a modal
+                  if (buses.length > 0) {
+                    Alert.alert(
+                      'Select Bus',
+                      'Choose a bus',
+                      [
+                        ...buses.slice(0, 5).map(bus => ({
+                          text: `${bus.name} (${bus.id})`,
+                          onPress: () => setSelectedBus(bus)
+                        })),
+                        { text: 'None', onPress: () => setSelectedBus(null) },
+                        { text: 'Cancel', style: 'cancel' as const }
+                      ]
+                    );
+                  }
+                }}
+              >
+                <Text style={{ color: selectedBus ? colors.text : colors.textSecondary }}>
+                  {selectedBus ? `${selectedBus.name} (${selectedBus.id})` : 'Select a bus...'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Optional Route ID field */}
+            {/* Optional Route selection */}
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Related Route ID (Optional)</Text>
-              <TextInput
+              <Text style={styles.inputLabel}>Related Route (Optional)</Text>
+              <TouchableOpacity
                 style={styles.textInput}
-                placeholder="e.g., ROUTE001"
-                placeholderTextColor={colors.textSecondary + '80'}
-                value={routeId}
-                onChangeText={setRouteId}
-                maxLength={20}
-              />
+                onPress={() => {
+                  // Simple route selection - could be enhanced with a modal
+                  if (routes.length > 0) {
+                    Alert.alert(
+                      'Select Route',
+                      'Choose a route',
+                      [
+                        ...routes.slice(0, 5).map(route => ({
+                          text: `${route.name} (${route.id})`,
+                          onPress: () => setSelectedRoute(route)
+                        })),
+                        { text: 'None', onPress: () => setSelectedRoute(null) },
+                        { text: 'Cancel', style: 'cancel' as const }
+                      ]
+                    );
+                  }
+                }}
+              >
+                <Text style={{ color: selectedRoute ? colors.text : colors.textSecondary }}>
+                  {selectedRoute ? `${selectedRoute.name} (${selectedRoute.id})` : 'Select a route...'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.inputContainer}>
@@ -550,7 +735,7 @@ export default function RequestsScreen() {
                 color={currentLocation ? colors.success : colors.warning}
               />
               <Text style={styles.infoText}>
-                {currentLocation
+                {currentLocation && currentLocation.latitude && currentLocation.longitude
                   ? `Location: ${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`
                   : isLoadingLocation
                     ? 'Getting your location...'
@@ -950,5 +1135,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Additional styles for WebSocket functionality
+  reportsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  connectionStatus: {
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  refreshButton: {
+    backgroundColor: colors.card,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginTop: 12,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 4,
   },
 });
