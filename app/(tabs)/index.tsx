@@ -4,7 +4,7 @@ import { WebView } from 'react-native-webview';
 // import { useRouter } from 'expo-router'; // Removed unused import
 import { useBusStore } from '@/stores/busStore';
 import { useRealTimeBuses } from '@/hooks/useRealTimeBuses';
-import { RealTimeBusStatus } from '@/components/RealTimeBusStatus';
+// import { RealTimeBusStatus } from '@/components/RealTimeBusStatus'; // Removed - not used
 import { colors } from '@/constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '@/i18n';
@@ -72,14 +72,18 @@ export default function MapScreen() {
       });
   }, [stops]);
 
-  // Memoize bus data to prevent unnecessary re-renders
+  // Memoize bus data to prevent unnecessary re-renders - ONLY LIVE TRACKING BUSES
   const busesForMap = useMemo(() => {
     return realTimeBuses
       .filter(bus => {
-        // Filter out buses without valid coordinates
-        return bus.coordinates &&
+        // Filter out buses without valid coordinates AND only show live tracking buses
+        const hasValidCoordinates = bus.coordinates &&
           typeof bus.coordinates.longitude === 'number' &&
           typeof bus.coordinates.latitude === 'number';
+
+        const isLiveTracking = (bus as any).isRealTime === true;
+
+        return hasValidCoordinates && isLiveTracking;
       })
       .map(bus => ({
         id: bus.id,
@@ -95,7 +99,7 @@ export default function MapScreen() {
         eta: bus.eta,
         heading: (bus as any).heading || 0,
         speed: (bus as any).speed || 0,
-        isRealTime: (bus as any).isRealTime || false,
+        isRealTime: true, // All buses in this array are live tracking
         lastUpdated: bus.lastUpdated
       }));
   }, [realTimeBuses]);
@@ -474,18 +478,7 @@ export default function MapScreen() {
               </html>`;
   }, [userLocation, busStopsForMap]); // Removed busesForMap from dependencies
 
-    const { 
-      buses, 
-      isConnected, 
-    } = useRealTimeBuses();
-  
-    const getStatusText = () => {
-      if (isConnected) return 'Real-time Connected';
-      if (isUsingFallback) return 'Using Fallback Data';
-      return 'Disconnected';
-    };
-  
-    const realTimeBusCount = buses.filter(bus => (bus as any).isRealTime).length;
+    // Only live tracking buses are shown on the map
   
   return (
     <SafeAreaView style={styles.safeAreaContainer}>
@@ -496,7 +489,7 @@ export default function MapScreen() {
             <Text style={styles.title}>{t('map.title')}</Text>
             <Text style={styles.subtitle}>{t('map.trackBuses')}</Text>
             <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
-              Bus stops: {busStopsForMap.length} | Real-time buses: {busesForMap.length} | Live-Tracking: {realTimeBusCount}
+              Bus stops: {busStopsForMap.length} | Live tracking buses: {busesForMap.length}
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={{
@@ -710,7 +703,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.card,
     borderRadius: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 9,
     paddingVertical: 0,
     borderWidth: 1,
     borderColor: colors.border,
