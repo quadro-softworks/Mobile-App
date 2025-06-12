@@ -30,9 +30,7 @@ export default function StopsScreen() {
     }
   };
 
-  const handleStopPress = (stop: BusStop) => {
-    router.push(`/stop/${stop.id}`);
-  };
+  // handleStopPress removed - bus stop cards are no longer clickable
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -114,7 +112,7 @@ export default function StopsScreen() {
               />
             </View>
             <TouchableOpacity style={styles.searchButton} onPress={() => handleSearch(searchQuery)}>
-              <Ionicons name="search" size={20} color={colors.white} />
+              <Ionicons name="search" size={20} color={colors.card} />
             </TouchableOpacity>
           </View>
         </View>
@@ -125,7 +123,6 @@ export default function StopsScreen() {
           renderItem={({ item }) => (
             <StopCard
               stop={item}
-              onPress={handleStopPress}
             />
           )}
           contentContainerStyle={styles.listContent}

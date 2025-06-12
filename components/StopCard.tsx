@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Card } from '@/components/ui/Card';
 import { BusStop } from '@/types';
 import { colors } from '@/constants/colors';
@@ -9,20 +9,16 @@ import { Ionicons } from '@expo/vector-icons';
 
 interface StopCardProps {
   stop: BusStop;
-  onPress: (stop: BusStop) => void;
-  showFavoriteButton?: boolean;
+  showFavoriteButton?: boolean; // Kept for compatibility but not used
 }
 
-export const StopCard: React.FC<StopCardProps> = ({ 
-  stop, 
-  onPress,
-  showFavoriteButton = false
+export const StopCard: React.FC<StopCardProps> = ({
+  stop
 }) => {
   // Removed favorite functionality as heart icon is not needed
   
   return (
-    <TouchableOpacity activeOpacity={0.7} onPress={() => onPress(stop)}>
-      <Card style={styles.card}>
+    <Card style={styles.card}>
         <View style={styles.header}>
           <Text style={styles.stopName}>{stop.name}</Text>
           {/* Heart icon removed as requested */}
@@ -70,7 +66,6 @@ export const StopCard: React.FC<StopCardProps> = ({
           </View>
         )}
       </Card>
-    </TouchableOpacity>
   );
 };
 
