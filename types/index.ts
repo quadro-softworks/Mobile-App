@@ -19,6 +19,33 @@ export interface User {
     profile_image?: string;
   }
   
+  export interface FullProfileUpdateData {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    phone_number?: string;
+    profile_image?: string;
+    date_of_birth?: string;
+    gender?: 'MALE' | 'FEMALE' | 'OTHER';
+    nationality?: string;
+    national_id?: string;
+    street_address?: string;
+    city?: string;
+    state_region?: string;
+    postal_code?: string;
+    country?: string;
+    emergency_contact_name?: string;
+    emergency_contact_phone?: string;
+    emergency_contact_relationship?: string;
+    secondary_phone?: string;
+    work_phone?: string;
+    preferred_language?: string;
+    preferred_payment_method?: string;
+    student_discount_eligible?: boolean;
+    senior_discount_eligible?: boolean;
+    disability_discount_eligible?: boolean;
+  }
+  
   export interface NotificationSettings {
     pushEnabled: boolean;
     emailEnabled: boolean;

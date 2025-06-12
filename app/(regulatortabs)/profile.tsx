@@ -63,8 +63,6 @@ export default function RegulatorProfileScreen() {
   const languages = [
     { code: 'en', name: 'English' },
     { code: 'am', name: 'አማርኛ (Amharic)' },
-    { code: 'or', name: 'Afaan Oromoo' },
-    { code: 'ti', name: 'ትግርኛ (Tigrinya)' },
   ];
 
   // Mock attendance data
@@ -435,16 +433,6 @@ export default function RegulatorProfileScreen() {
             placeholder="Enter last name"
           />
 
-          <Text style={styles.editFormLabel}>Email</Text>
-          <TextInput
-            style={styles.editFormInput}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Enter email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-
           <Text style={styles.editFormLabel}>Phone Number</Text>
           <TextInput
             style={styles.editFormInput}
@@ -492,30 +480,6 @@ export default function RegulatorProfileScreen() {
           {renderProfileItem('lock-closed', 'Reset Password', 'Change your password', () => setShowPasswordResetModal(true))}
           {renderProfileItem('log-out', 'Logout', 'Sign out of your account', handleLogout)}
         </View>
-
-        {/* Assigned Stops */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Assigned Stops</Text>
-          {assignedStops.map((stop) => (
-            <View key={stop.id} style={styles.assignedStopItem}>
-              <Text style={styles.assignedStopName}>{stop.name}</Text>
-              <Text style={styles.assignedStopDetails}>{stop.location}</Text>
-              <Text style={styles.assignedStopRoutes}>Routes: {stop.routes.join(', ')}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Attendance Records */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Attendance Records</Text>
-          <FlatList
-            data={attendanceRecords}
-            renderItem={renderAttendanceItem}
-            keyExtractor={(item) => item.id}
-            scrollEnabled={false}
-          />
-        </View>
-
         {/* Modals */}
         {renderLanguageModal()}
         {renderEditProfileModal()}

@@ -62,10 +62,10 @@ export const userApi = {
   },
 
   /**
-   * Update user profile
-   * PUT /api/account/me (assuming this endpoint exists)
+   * Update user profile (full schema)
+   * PUT /api/account/me
    */
-  updateProfile: async (updateData: Partial<UserProfile>): Promise<UserProfile> => {
+  updateProfile: async (updateData: import('../types').FullProfileUpdateData): Promise<UserProfile> => {
     try {
       const headers = await getAuthHeaders();
       
