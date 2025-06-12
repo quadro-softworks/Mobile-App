@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/stores/authStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 
 interface BusLocationUpdate {
   busId: string;
@@ -12,10 +13,47 @@ interface BusLocationUpdate {
   eta: number;
 }
 
+interface WebSocketNotification {
+  id: string;
+  title: string;
+  message: string;
+  notification_type: 'REALLOCATION_REQUEST_SUBMITTED' | 'ROUTE_REALLOCATION' | 'GENERAL' | 'CHAT_MESSAGE' | 'INCIDENT_REPORTED';
+  related_entity?: {
+    entity_type: string;
+    request_id?: string;
+    bus_id?: string;
+    current_route_id?: string;
+    requesting_regulator_id?: string;
+    reason?: 'OVERCROWDING' | 'BREAKDOWN' | 'SCHEDULE_DELAY' | 'OTHER';
+    priority?: 'HIGH' | 'MEDIUM' | 'LOW';
+    // Chat-specific fields
+    chat_id?: string;
+    sender_id?: string;
+    sender_name?: string;
+    chat_type?: 'DIRECT' | 'GROUP' | 'SUPPORT';
+    // Incident-specific fields
+    incident_id?: string;
+    incident_type?: 'VEHICLE_ISSUE' | 'PASSENGER_INCIDENT' | 'ROUTE_PROBLEM' | 'SCHEDULE_DELAY' | 'OTHER';
+    severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    reporter_id?: string;
+    reporter_name?: string;
+    location?: {
+      latitude: number;
+      longitude: number;
+    };
+    [key: string]: any;
+  };
+  timestamp: string;
+  is_read: boolean;
+}
+
 interface SocketEvents {
   'bus:location:update': (data: BusLocationUpdate) => void;
   'bus:status:update': (data: { busId: string; status: string; eta: number }) => void;
   'bus:route:update': (data: { busId: string; routeId: string; stops: string[] }) => void;
+  'notification:received': (notification: WebSocketNotification) => void;
+  'chat:message:received': (message: WebSocketNotification) => void;
+  'incident:reported': (incident: WebSocketNotification) => void;
   'connect': () => void;
   'disconnect': () => void;
   'error': (error: any) => void;
@@ -34,6 +72,8 @@ interface WebSocketMessage {
   heading?: number;
   speed?: number;
   timestamp?: string;
+  // Notification properties
+  notification?: WebSocketNotification;
 }
 
 class BusTrackingSocket {
@@ -153,6 +193,10 @@ class BusTrackingSocket {
       // Subscribe to all buses using the real backend format
       this.sendMessage('subscribe_all_buses', {});
       console.log('🚌 Subscribed to all bus location updates');
+
+      // Subscribe to notifications
+      this.sendMessage('subscribe_notifications', {});
+      console.log('🔔 Subscribed to notifications');
     };
 
     this.socket.onclose = (event) => {
@@ -257,6 +301,52 @@ class BusTrackingSocket {
 
           case 'pong':
             console.log('🏓 Pong received from server');
+            break;
+
+          case 'notification':
+            if (message.notification) {
+              console.log('🔔 NOTIFICATION received:', {
+                id: message.notification.id,
+                title: message.notification.title,
+                type: message.notification.notification_type,
+                timestamp: message.notification.timestamp
+              });
+
+              // Transform WebSocket notification to app notification format
+              const appNotification = {
+                id: message.notification.id,
+                user_id: '', // Will be filled by the notification store
+                title: message.notification.title,
+                message: message.notification.message,
+                type: this.mapNotificationTypeToAppType(message.notification.notification_type),
+                is_read: message.notification.is_read,
+                created_at: message.notification.timestamp,
+                updated_at: message.notification.timestamp,
+                related_entity: message.notification.related_entity ? {
+                  entity_type: message.notification.related_entity.entity_type,
+                  entity_id: message.notification.related_entity.request_id ||
+                           message.notification.related_entity.bus_id ||
+                           message.notification.related_entity.chat_id ||
+                           message.notification.related_entity.entity_type,
+                } : undefined,
+                // Legacy fields for backward compatibility
+                createdAt: message.notification.timestamp,
+                read: message.notification.is_read,
+              };
+
+              // Add to notification store
+              this.addNotificationToStore(appNotification);
+
+              // Emit to listeners based on type
+              if (message.notification.notification_type === 'CHAT_MESSAGE') {
+                this.emit('chat:message:received', message.notification);
+              } else if (message.notification.notification_type === 'INCIDENT_REPORTED') {
+                this.emit('incident:reported', message.notification);
+                this.emit('notification:received', message.notification); // Also emit as general notification
+              } else {
+                this.emit('notification:received', message.notification);
+              }
+            }
             break;
 
           default:
@@ -436,10 +526,110 @@ class BusTrackingSocket {
       console.warn('⚠️ Cannot send driver location - socket not connected');
     }
   }
+
+  // Map WebSocket notification types to app notification types
+  private mapNotificationTypeToAppType(wsType: string): 'ALERT' | 'INFO' | 'PROMO' | 'SYSTEM' | 'UPDATE' {
+    switch (wsType) {
+      case 'REALLOCATION_REQUEST_SUBMITTED':
+      case 'ROUTE_REALLOCATION':
+      case 'INCIDENT_REPORTED':
+        return 'ALERT';
+      case 'CHAT_MESSAGE':
+        return 'INFO';
+      case 'GENERAL':
+        return 'SYSTEM';
+      default:
+        return 'INFO';
+    }
+  }
+
+  // Add notification to the notification store
+  private addNotificationToStore(notification: any) {
+    try {
+      const notificationStore = useNotificationStore.getState();
+
+      // Check if notification already exists to avoid duplicates
+      const existingNotification = notificationStore.notifications.find(n => n.id === notification.id);
+      if (existingNotification) {
+        console.log('🔔 Notification already exists, skipping:', notification.id);
+        return;
+      }
+
+      // Add notification to the beginning of the array (most recent first)
+      const updatedNotifications = [notification, ...notificationStore.notifications];
+
+      // Update the store directly
+      useNotificationStore.setState({
+        notifications: updatedNotifications
+      });
+
+      console.log('🔔 Added notification to store:', {
+        id: notification.id,
+        title: notification.title,
+        type: notification.type,
+        totalNotifications: updatedNotifications.length
+      });
+    } catch (error) {
+      console.error('❌ Error adding notification to store:', error);
+    }
+  }
+
+  // Subscribe to notifications (called after connection)
+  subscribeToNotifications() {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      this.sendMessage('subscribe_notifications', {});
+      console.log('🔔 Subscribed to notifications');
+    } else {
+      console.warn('⚠️ Cannot subscribe to notifications - socket not connected');
+    }
+  }
+
+  // Send chat message
+  sendChatMessage(message: string, recipientId?: string, chatType: 'DIRECT' | 'GROUP' | 'SUPPORT' = 'SUPPORT') {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      const chatData = {
+        message,
+        recipient_id: recipientId,
+        chat_type: chatType,
+        timestamp: new Date().toISOString()
+      };
+
+      this.sendMessage('send_chat_message', chatData);
+      console.log('💬 Sent chat message:', { chatType, recipientId, messageLength: message.length });
+    } else {
+      console.warn('⚠️ Cannot send chat message - socket not connected');
+    }
+  }
+
+  // Send incident report
+  sendIncidentReport(incidentData: {
+    description: string;
+    incident_type: 'VEHICLE_ISSUE' | 'PASSENGER_INCIDENT' | 'ROUTE_PROBLEM' | 'SCHEDULE_DELAY' | 'OTHER';
+    severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    location?: { latitude: number; longitude: number };
+    related_bus_id?: string;
+    related_route_id?: string;
+  }) {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      const reportData = {
+        ...incidentData,
+        timestamp: new Date().toISOString()
+      };
+
+      this.sendMessage('report_incident', reportData);
+      console.log('🚨 Sent incident report:', {
+        type: incidentData.incident_type,
+        severity: incidentData.severity,
+        busId: incidentData.related_bus_id
+      });
+    } else {
+      console.warn('⚠️ Cannot send incident report - socket not connected');
+    }
+  }
 }
 
 // Create and export singleton instance
 export const busTrackingSocket = new BusTrackingSocket();
 
 // Export types for use in components
-export type { BusLocationUpdate, SocketEvents };
+export type { BusLocationUpdate, SocketEvents, WebSocketNotification };
