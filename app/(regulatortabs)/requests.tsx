@@ -18,7 +18,7 @@ import { useAuthStore } from '@/stores/authStore';
 
 interface Request {
   id: string;
-  type: 'bus_reallocation' | 'overcrowding' | 'stop_issue' | 'assistance';
+  type: 'overcrowding';
   title: string;
   description: string;
   status: 'pending' | 'accepted' | 'denied';
@@ -37,22 +37,14 @@ interface RequestType {
 export default function RequestsScreen() {
   const { user } = useAuthStore();
   const { t } = useTranslation();
+
   const [requests, setRequests] = useState<Request[]>([]);
   const [selectedRequestType, setSelectedRequestType] = useState<RequestType | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [requestDescription, setRequestDescription] = useState('');
-  const [currentRoute, setCurrentRoute] = useState('');
-  const [targetRoute, setTargetRoute] = useState('');
   const [passengerCount, setPassengerCount] = useState('');
 
   const requestTypes: RequestType[] = [
-    {
-      id: 'bus_reallocation',
-      title: 'Bus Reallocation / RDN Switch',
-      description: 'Request bus reallocation or route designation change',
-      icon: 'swap-horizontal',
-      color: colors.primary,
-    },
     {
       id: 'overcrowding',
       title: 'Report Overcrowding',
@@ -62,28 +54,19 @@ export default function RequestsScreen() {
     },
   ];
 
-  // Mock requests data
-  const mockRequests: Request[] = [
-    {
-      id: '1',
-      type: 'bus_reallocation',
-      title: 'Bus Reallocation Request',
-      description: 'Route R12 has many passengers, Route R15 has few buses available for Route R12',
-      status: 'pending',
-      timestamp: '2024-01-15T10:30:00Z',
-    },
-    {
-      id: '2',
-      type: 'overcrowding',
-      title: 'Overcrowding Report',
-      description: 'Heavy passenger queue at Stadium stop - approximately 40 waiting passengers',
-      status: 'accepted',
-      timestamp: '2024-01-15T09:15:00Z',
-      response: 'Additional bus dispatched to your location. ETA: 5 minutes.',
-    },
-  ];
-
+  // Mock requests data for demonstration
   React.useEffect(() => {
+    const mockRequests: Request[] = [
+      {
+        id: '1',
+        type: 'overcrowding',
+        title: 'Overcrowding Report',
+        description: 'Heavy passenger queue at Stadium stop - approximately 40 waiting passengers',
+        status: 'accepted',
+        timestamp: '2024-01-15T09:15:00Z',
+        response: 'Additional bus dispatched to your location. ETA: 5 minutes.',
+      },
+    ];
     setRequests(mockRequests);
   }, []);
 
@@ -100,15 +83,9 @@ export default function RequestsScreen() {
 
     try {
       let description = requestDescription.trim();
-      
+
       // Add specific fields based on request type
-      if (selectedRequestType.id === 'bus_reallocation') {
-        if (!currentRoute.trim() || !targetRoute.trim()) {
-          Alert.alert('Error', 'Please specify both current and target routes');
-          return;
-        }
-        description = `Current Route: ${currentRoute}, Target Route: ${targetRoute}. ${description}`;
-      } else if (selectedRequestType.id === 'overcrowding') {
+      if (selectedRequestType.id === 'overcrowding') {
         if (passengerCount.trim()) {
           description = `Estimated passengers: ${passengerCount}. ${description}`;
         }
@@ -124,12 +101,10 @@ export default function RequestsScreen() {
       };
 
       setRequests(prev => [newRequest, ...prev]);
-      
+
       // Reset form
       setSelectedRequestType(null);
       setRequestDescription('');
-      setCurrentRoute('');
-      setTargetRoute('');
       setPassengerCount('');
       setIsModalVisible(false);
 
@@ -139,6 +114,8 @@ export default function RequestsScreen() {
       Alert.alert('Error', 'Failed to submit request');
     }
   };
+
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -190,6 +167,8 @@ export default function RequestsScreen() {
     </View>
   );
 
+
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -198,10 +177,11 @@ export default function RequestsScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Overcrowding Reports Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Submit New Request</Text>
-          <Text style={styles.sectionSubtitle}>Select the type of request you want to submit</Text>
-          
+          <Text style={styles.sectionTitle}>Submit Request</Text>
+          <Text style={styles.sectionSubtitle}>Report passenger overcrowding at your stop</Text>
+
           <View style={styles.requestTypesContainer}>
             {requestTypes.map(renderRequestType)}
           </View>
@@ -210,8 +190,8 @@ export default function RequestsScreen() {
         {requests.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Request History</Text>
-            <Text style={styles.sectionSubtitle}>Your submitted requests and their status</Text>
-            
+            <Text style={styles.sectionSubtitle}>Your submitted reports and their status</Text>
+
             <FlatList
               data={requests}
               renderItem={renderRequest}
@@ -253,32 +233,7 @@ export default function RequestsScreen() {
               </View>
             )}
 
-            {/* Bus Reallocation specific fields */}
-            {selectedRequestType?.id === 'bus_reallocation' && (
-              <>
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Current Route *</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="e.g., R12"
-                    value={currentRoute}
-                    onChangeText={setCurrentRoute}
-                    maxLength={10}
-                  />
-                </View>
 
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Target Route *</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="e.g., R15"
-                    value={targetRoute}
-                    onChangeText={setTargetRoute}
-                    maxLength={10}
-                  />
-                </View>
-              </>
-            )}
 
             {/* Overcrowding specific fields */}
             {selectedRequestType?.id === 'overcrowding' && (
@@ -550,4 +505,5 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 20,
   },
+
 });
