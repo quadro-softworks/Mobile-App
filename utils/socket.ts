@@ -147,10 +147,10 @@ class BusTrackingSocket {
 
       const endpoints = [
             // Primary endpoint based on backend API info
-            `wss://guzossync-fastapi.onrender.com/ws/connect?token=${encodeURIComponent(this.authToken)}`,
+            `wss://guzosync-fastapi.onrender.com/ws/connect?token=${encodeURIComponent(this.authToken)}`,
             // Fallback endpoints
-            `wss://guzossync-fastapi.onrender.com/ws?token=${encodeURIComponent(this.authToken)}`,
-            `wss://guzossync-fastapi.onrender.com/ws/connect?auth=${encodeURIComponent(this.authToken)}`,
+            `wss://guzosync-fastapi.onrender.com/ws?token=${encodeURIComponent(this.authToken)}`,
+            `wss://guzosync-fastapi.onrender.com/ws/connect?auth=${encodeURIComponent(this.authToken)}`,
           ];
 
       const currentEndpoint = endpoints[this.currentEndpointIndex];
