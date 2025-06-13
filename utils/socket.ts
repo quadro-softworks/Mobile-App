@@ -621,8 +621,6 @@ class BusTrackingSocket {
     incident_type: 'VEHICLE_ISSUE' | 'PASSENGER_INCIDENT' | 'ROUTE_PROBLEM' | 'SCHEDULE_DELAY' | 'OTHER';
     severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
     location?: { latitude: number; longitude: number };
-    related_bus_id?: string;
-    related_route_id?: string;
   }) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       const reportData = {
@@ -633,8 +631,7 @@ class BusTrackingSocket {
       this.sendMessage('report_incident', reportData);
       console.log('🚨 Sent incident report:', {
         type: incidentData.incident_type,
-        severity: incidentData.severity,
-        busId: incidentData.related_bus_id
+        severity: incidentData.severity
       });
     } else {
       console.warn('⚠️ Cannot send incident report - socket not connected');

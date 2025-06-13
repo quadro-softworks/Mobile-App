@@ -12,8 +12,6 @@ export interface CreateIncidentRequest {
   description: string;
   incident_type: 'VEHICLE_ISSUE';
   location: IncidentLocation;
-  related_bus_id?: string;
-  related_route_id?: string;
   severity: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
@@ -25,8 +23,6 @@ export interface IncidentResponse {
   description: string;
   incident_type: 'VEHICLE_ISSUE';
   location: IncidentLocation;
-  related_bus_id?: string;
-  related_route_id?: string;
   is_resolved: boolean;
   resolution_notes?: string;
   severity: 'LOW' | 'MEDIUM' | 'HIGH';

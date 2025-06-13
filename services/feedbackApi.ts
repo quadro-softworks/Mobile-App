@@ -60,8 +60,26 @@ export const feedbackApi = {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to submit feedback');
+        // Check if response is JSON before parsing
+        const contentType = response.headers.get('content-type');
+        let errorMessage = 'Failed to submit feedback';
+
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.detail || errorMessage;
+          } catch (parseError) {
+            console.warn('Failed to parse error response as JSON:', parseError);
+            errorMessage = `Server error (${response.status}): ${response.statusText}`;
+          }
+        } else {
+          // Handle non-JSON error responses
+          const errorText = await response.text();
+          console.warn('Received non-JSON error response:', errorText.substring(0, 200));
+          errorMessage = `Server error (${response.status}). Please try again later.`;
+        }
+
+        throw new Error(errorMessage);
       }
 
       const feedback: FeedbackResponse = await response.json();

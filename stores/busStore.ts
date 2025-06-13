@@ -160,9 +160,27 @@ export const useBusStore = create<BusStore>((set, get) => ({
       console.log('API Response status:', response.status, 'OK:', response.ok);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('API Error:', errorData);
-        throw new Error(errorData.detail || 'Failed to fetch bus stops');
+        // Check if response is JSON before parsing
+        const contentType = response.headers.get('content-type');
+        let errorMessage = 'Failed to fetch bus stops';
+
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const errorData = await response.json();
+            console.error('API Error:', errorData);
+            errorMessage = errorData.detail || errorMessage;
+          } catch (parseError) {
+            console.warn('Failed to parse error response as JSON:', parseError);
+            errorMessage = `Server error (${response.status}): ${response.statusText}`;
+          }
+        } else {
+          // Handle non-JSON error responses
+          const errorText = await response.text();
+          console.warn('Received non-JSON error response:', errorText.substring(0, 200));
+          errorMessage = `Server error (${response.status}). Please try again later.`;
+        }
+
+        throw new Error(errorMessage);
       }
 
       const stops: BusStop[] = await response.json();
@@ -301,15 +319,27 @@ export const useBusStore = create<BusStore>((set, get) => ({
         console.log(`Page ${currentPage} response status:`, response.status, 'OK:', response.ok);
 
         if (!response.ok) {
-          let errorData;
-          try {
-            errorData = await response.json();
-          } catch (parseError) {
-            console.error('Failed to parse error response on page', currentPage);
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          // Check if response is JSON before parsing
+          const contentType = response.headers.get('content-type');
+          let errorMessage = `Failed to fetch bus stops (HTTP ${response.status})`;
+
+          if (contentType && contentType.includes('application/json')) {
+            try {
+              const errorData = await response.json();
+              console.error('API Error on page', currentPage, ':', errorData);
+              errorMessage = errorData.detail || errorMessage;
+            } catch (parseError) {
+              console.error('Failed to parse error response on page', currentPage, ':', parseError);
+              errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+            }
+          } else {
+            // Handle non-JSON error responses
+            const errorText = await response.text();
+            console.warn('Received non-JSON error response on page', currentPage, ':', errorText.substring(0, 200));
+            errorMessage = `Server error (${response.status}). Please try again later.`;
           }
-          console.error('API Error on page', currentPage, ':', errorData);
-          throw new Error(errorData.detail || `Failed to fetch bus stops (HTTP ${response.status})`);
+
+          throw new Error(errorMessage);
         }
 
         const pageStops: BusStop[] = await response.json();
@@ -381,8 +411,26 @@ export const useBusStore = create<BusStore>((set, get) => ({
       );
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to fetch bus stop');
+        // Check if response is JSON before parsing
+        const contentType = response.headers.get('content-type');
+        let errorMessage = 'Failed to fetch bus stop';
+
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.detail || errorMessage;
+          } catch (parseError) {
+            console.warn('Failed to parse error response as JSON:', parseError);
+            errorMessage = `Server error (${response.status}): ${response.statusText}`;
+          }
+        } else {
+          // Handle non-JSON error responses
+          const errorText = await response.text();
+          console.warn('Received non-JSON error response:', errorText.substring(0, 200));
+          errorMessage = `Server error (${response.status}). Please try again later.`;
+        }
+
+        throw new Error(errorMessage);
       }
 
       const stop: BusStop = await response.json();

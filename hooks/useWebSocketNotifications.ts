@@ -121,8 +121,6 @@ export const useWebSocketNotifications = (options: UseWebSocketNotificationsOpti
       incident_type: 'VEHICLE_ISSUE' | 'PASSENGER_INCIDENT' | 'ROUTE_PROBLEM' | 'SCHEDULE_DELAY' | 'OTHER';
       severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
       location?: { latitude: number; longitude: number };
-      related_bus_id?: string;
-      related_route_id?: string;
     }) => busTrackingSocket.sendIncidentReport(incidentData),
   };
 };

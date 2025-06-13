@@ -16,9 +16,7 @@ import { useTranslation } from '@/i18n';
 import * as Location from 'expo-location';
 import { colors } from '@/constants/colors';
 import { useIncidentStore } from '@/stores/incidentStore';
-import { useBusStore } from '@/stores/busStore';
 import { CreateIncidentRequest, IncidentLocation, incidentApi } from '@/services/incidentApi';
-import { Bus, Route } from '@/types';
 import { useWebSocketNotifications } from '@/hooks/useWebSocketNotifications';
 // import { manualTest } from '@/utils/websocket-test';
 
@@ -39,14 +37,11 @@ interface Report {
   timestamp: string;
   status: 'pending' | 'submitted' | 'resolved';
   severity?: 'LOW' | 'MEDIUM' | 'HIGH';
-  related_bus_id?: string;
-  related_route_id?: string;
 }
 
 export default function ReportScreen() {
   // Store hooks
   const { reportIncident, fetchUserIncidents, incidents, isLoading: incidentLoading, error: incidentError } = useIncidentStore();
-  const { buses, routes, fetchBuses, fetchRoutes } = useBusStore();
   const { t } = useTranslation();
 
   // WebSocket for real-time incident reporting
@@ -84,8 +79,6 @@ export default function ReportScreen() {
   const [selectedReportType, setSelectedReportType] = useState<ReportType | null>(null);
   const [reportDescription, setReportDescription] = useState('');
   const [selectedSeverity, setSelectedSeverity] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('LOW');
-  const [selectedBus, setSelectedBus] = useState<Bus | null>(null);
-  const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [currentLocation, setCurrentLocation] = useState<IncidentLocation | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
@@ -96,11 +89,9 @@ export default function ReportScreen() {
 
   // Load data on component mount
   useEffect(() => {
-    fetchBuses();
-    fetchRoutes();
     fetchUserIncidents();
     getCurrentLocation();
-  }, [fetchBuses, fetchRoutes, fetchUserIncidents]);
+  }, [fetchUserIncidents]);
 
   // Convert incidents to reports for display
   useEffect(() => {
@@ -113,8 +104,6 @@ export default function ReportScreen() {
       timestamp: incident.created_at,
       status: incident.is_resolved ? 'resolved' : 'submitted',
       severity: incident.severity,
-      related_bus_id: incident.related_bus_id,
-      related_route_id: incident.related_route_id,
     }));
     setReports(convertedReports);
   }, [incidents]);
@@ -171,6 +160,22 @@ export default function ReportScreen() {
     }
   };
 
+  const manualTest = () => {
+    console.log('🧪 Manual WebSocket test triggered');
+    if (isConnected) {
+      // Send a test incident report via WebSocket
+      sendIncidentReport({
+        description: 'Test incident report from manual test',
+        incident_type: 'VEHICLE_ISSUE',
+        severity: 'LOW',
+        location: currentLocation || { latitude: 9.032, longitude: 38.7469 },
+      });
+      Alert.alert('Test Sent', 'Test incident report sent via WebSocket');
+    } else {
+      Alert.alert('WebSocket Offline', 'WebSocket is not connected. Cannot send test.');
+    }
+  };
+
   const reportTypes: ReportType[] = [
     {
       id: 'vehicle_issue',
@@ -217,8 +222,6 @@ export default function ReportScreen() {
         incident_type: 'VEHICLE_ISSUE',
         location: currentLocation,
         severity: selectedSeverity,
-        ...(selectedBus && { related_bus_id: selectedBus.id }),
-        ...(selectedRoute && { related_route_id: selectedRoute.id }),
       };
 
       // Submit via API
@@ -231,8 +234,6 @@ export default function ReportScreen() {
           incident_type: 'VEHICLE_ISSUE',
           severity: selectedSeverity,
           location: currentLocation,
-          ...(selectedBus && { related_bus_id: selectedBus.id }),
-          ...(selectedRoute && { related_route_id: selectedRoute.id }),
         });
         console.log('🚨 Incident also sent via WebSocket for real-time notifications');
       }
@@ -241,8 +242,6 @@ export default function ReportScreen() {
       setSelectedReportType(null);
       setReportDescription('');
       setSelectedSeverity('LOW');
-      setSelectedBus(null);
-      setSelectedRoute(null);
       setIsModalVisible(false);
 
       Alert.alert('Success', 'Incident reported successfully');
@@ -293,17 +292,7 @@ export default function ReportScreen() {
     }
   };
 
-  const getBusName = (busId?: string) => {
-    if (!busId) return null;
-    const bus = buses.find(b => b.id === busId);
-    return bus?.name || `Bus ${busId}`;
-  };
 
-  const getRouteName = (routeId?: string) => {
-    if (!routeId) return null;
-    const route = routes.find(r => r.id === routeId);
-    return route?.name || `Route ${routeId}`;
-  };
 
   const renderReport = (report: Report) => (
     <View key={report.id} style={styles.reportCard}>
@@ -324,24 +313,6 @@ export default function ReportScreen() {
       </View>
 
       <Text style={styles.reportDescription}>{report.description}</Text>
-
-      {/* Related Bus and Route */}
-      {(report.related_bus_id || report.related_route_id) && (
-        <View style={styles.relatedInfoContainer}>
-          {report.related_bus_id && (
-            <View style={styles.relatedItem}>
-              <Ionicons name="bus" size={14} color={colors.primary} />
-              <Text style={styles.relatedText}>{getBusName(report.related_bus_id)}</Text>
-            </View>
-          )}
-          {report.related_route_id && (
-            <View style={styles.relatedItem}>
-              <Ionicons name="map" size={14} color={colors.primary} />
-              <Text style={styles.relatedText}>{getRouteName(report.related_route_id)}</Text>
-            </View>
-          )}
-        </View>
-      )}
 
       {/* Location */}
       {report.location && (
@@ -521,83 +492,7 @@ export default function ReportScreen() {
               </View>
             </View>
 
-            {buses.length > 0 && (
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Related Bus (Optional)</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
-                  <TouchableOpacity
-                    style={[
-                      styles.selectionOption,
-                      !selectedBus && styles.selectedSelectionOption
-                    ]}
-                    onPress={() => setSelectedBus(null)}
-                  >
-                    <Text style={[
-                      styles.selectionOptionText,
-                      !selectedBus && styles.selectedSelectionOptionText
-                    ]}>
-                      None
-                    </Text>
-                  </TouchableOpacity>
-                  {buses.map((bus) => (
-                    <TouchableOpacity
-                      key={bus.id}
-                      style={[
-                        styles.selectionOption,
-                        selectedBus?.id === bus.id && styles.selectedSelectionOption
-                      ]}
-                      onPress={() => setSelectedBus(bus)}
-                    >
-                      <Text style={[
-                        styles.selectionOptionText,
-                        selectedBus?.id === bus.id && styles.selectedSelectionOptionText
-                      ]}>
-                        {bus.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
 
-            {routes.length > 0 && (
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Related Route (Optional)</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
-                  <TouchableOpacity
-                    style={[
-                      styles.selectionOption,
-                      !selectedRoute && styles.selectedSelectionOption
-                    ]}
-                    onPress={() => setSelectedRoute(null)}
-                  >
-                    <Text style={[
-                      styles.selectionOptionText,
-                      !selectedRoute && styles.selectedSelectionOptionText
-                    ]}>
-                      None
-                    </Text>
-                  </TouchableOpacity>
-                  {routes.map((route) => (
-                    <TouchableOpacity
-                      key={route.id}
-                      style={[
-                        styles.selectionOption,
-                        selectedRoute?.id === route.id && styles.selectedSelectionOption
-                      ]}
-                      onPress={() => setSelectedRoute(route)}
-                    >
-                      <Text style={[
-                        styles.selectionOptionText,
-                        selectedRoute?.id === route.id && styles.selectedSelectionOptionText
-                      ]}>
-                        {route.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
 
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Location</Text>
@@ -794,21 +689,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
   },
-  relatedInfoContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 8,
-  },
-  relatedItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  relatedText: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: '500',
-  },
+
   reportFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1004,29 +885,7 @@ const styles = StyleSheet.create({
   selectedSeverityOptionText: {
     color: '#fff',
   },
-  horizontalScroll: {
-    marginTop: 8,
-  },
-  selectionOption: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    marginRight: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-  },
-  selectedSelectionOption: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  selectionOptionText: {
-    fontSize: 14,
-    color: colors.text,
-  },
-  selectedSelectionOptionText: {
-    color: '#fff',
-  },
+
   locationInfo: {
     marginTop: 8,
   },

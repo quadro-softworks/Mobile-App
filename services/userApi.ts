@@ -77,15 +77,27 @@ export const userApi = {
 
       if (!response.ok) {
         if (response.status === 422) {
-          const errorData = await response.json();
-          const errorMessages = errorData.detail?.map((err: any) => err.msg).join(', ') || 'Validation error';
-          throw new Error(`Validation Error: ${errorMessages}`);
+          // Check if response is JSON before parsing
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            try {
+              const errorData = await response.json();
+              const errorMessages = errorData.detail?.map((err: any) => err.msg).join(', ') || 'Validation error';
+              throw new Error(`Validation Error: ${errorMessages}`);
+            } catch (parseError) {
+              console.warn('Failed to parse validation error response as JSON:', parseError);
+              throw new Error('Validation error occurred');
+            }
+          } else {
+            throw new Error('Validation error occurred');
+          }
         } else if (response.status === 401) {
           throw new Error('Authentication required. Please log in again.');
         } else if (response.status === 404) {
           throw new Error('User profile not found.');
         } else {
-          throw new Error('Failed to update user profile');
+          const errorText = await response.text();
+          throw new Error(`Failed to update user profile: ${errorText}`);
         }
       }
 

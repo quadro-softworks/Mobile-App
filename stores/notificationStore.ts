@@ -39,8 +39,41 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
       );
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to fetch notifications');
+        // Check if response is JSON before parsing
+        const contentType = response.headers.get('content-type');
+        let errorMessage = 'Failed to fetch notifications';
+
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.detail || errorMessage;
+          } catch (parseError) {
+            console.warn('Failed to parse error response as JSON:', parseError);
+            errorMessage = `Server error (${response.status}): ${response.statusText}`;
+          }
+        } else {
+          // Handle non-JSON error responses (like HTML error pages)
+          const errorText = await response.text();
+          console.warn('Received non-JSON error response:', errorText.substring(0, 200));
+
+          if (response.status === 500) {
+            errorMessage = 'Server is temporarily unavailable. Please try again later.';
+          } else if (response.status === 401) {
+            errorMessage = 'Authentication failed. Please log in again.';
+          } else if (response.status === 403) {
+            errorMessage = 'You do not have permission to access notifications.';
+          } else {
+            errorMessage = `Server error (${response.status}). Please try again later.`;
+          }
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned invalid response format. Please try again later.');
       }
 
       const notifications: Notification[] = await response.json();
@@ -59,7 +92,20 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
       set({ notifications: transformedNotifications, isLoading: false });
     } catch (error) {
       console.error('Fetch notifications error:', error);
-      set({ error: (error as Error).message, isLoading: false });
+
+      // Provide more user-friendly error messages
+      let errorMessage = 'Failed to fetch notifications';
+      if (error instanceof Error) {
+        if (error.message.includes('Failed to fetch') || error.message.includes('Network request failed')) {
+          errorMessage = 'Network connection failed. Please check your internet connection.';
+        } else if (error.message.includes('JSON')) {
+          errorMessage = 'Server returned invalid data. Please try again later.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
+      set({ error: errorMessage, isLoading: false });
     }
   },
   
