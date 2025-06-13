@@ -10,7 +10,7 @@ export interface IncidentLocation {
 
 export interface CreateIncidentRequest {
   description: string;
-  incident_type: 'VEHICLE_ISSUE';
+  incident_type: 'VEHICLE_ISSUE' | 'SAFETY_CONCERN' | 'OTHER';
   location: IncidentLocation;
   severity: 'LOW' | 'MEDIUM' | 'HIGH';
 }
@@ -21,7 +21,7 @@ export interface IncidentResponse {
   id: string;
   reported_by_user_id: string;
   description: string;
-  incident_type: 'VEHICLE_ISSUE';
+  incident_type: 'VEHICLE_ISSUE' | 'SAFETY_CONCERN' | 'OTHER';
   location: IncidentLocation;
   is_resolved: boolean;
   resolution_notes?: string;

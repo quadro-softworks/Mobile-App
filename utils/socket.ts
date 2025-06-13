@@ -618,8 +618,8 @@ class BusTrackingSocket {
   // Send incident report
   sendIncidentReport(incidentData: {
     description: string;
-    incident_type: 'VEHICLE_ISSUE' | 'PASSENGER_INCIDENT' | 'ROUTE_PROBLEM' | 'SCHEDULE_DELAY' | 'OTHER';
-    severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    incident_type: 'VEHICLE_ISSUE' | 'SAFETY_CONCERN' | 'OTHER';
+    severity: 'LOW' | 'MEDIUM' | 'HIGH';
     location?: { latitude: number; longitude: number };
   }) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {

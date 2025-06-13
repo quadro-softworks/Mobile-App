@@ -37,6 +37,7 @@ interface Report {
   timestamp: string;
   status: 'pending' | 'submitted' | 'resolved';
   severity?: 'LOW' | 'MEDIUM' | 'HIGH';
+  incident_type?: 'VEHICLE_ISSUE' | 'SAFETY_CONCERN' | 'OTHER';
 }
 
 export default function ReportScreen() {
@@ -98,12 +99,13 @@ export default function ReportScreen() {
     const convertedReports: Report[] = incidents.map(incident => ({
       id: incident.id,
       type: 'incident',
-      title: 'Incident Report',
+      title: getIncidentTypeDisplayName(incident.incident_type),
       description: incident.description,
       location: incident.location,
       timestamp: incident.created_at,
       status: incident.is_resolved ? 'resolved' : 'submitted',
       severity: incident.severity,
+      incident_type: incident.incident_type,
     }));
     setReports(convertedReports);
   }, [incidents]);
@@ -176,6 +178,34 @@ export default function ReportScreen() {
     }
   };
 
+  // Helper function to map UI report types to incident types
+  const getIncidentType = (reportTypeId: string): 'VEHICLE_ISSUE' | 'SAFETY_CONCERN' | 'OTHER' => {
+    switch (reportTypeId) {
+      case 'vehicle_issue':
+        return 'VEHICLE_ISSUE';
+      case 'safety_concern':
+        return 'SAFETY_CONCERN';
+      case 'other':
+        return 'OTHER';
+      default:
+        return 'OTHER';
+    }
+  };
+
+  // Helper function to get incident type display name
+  const getIncidentTypeDisplayName = (incidentType: string): string => {
+    switch (incidentType) {
+      case 'VEHICLE_ISSUE':
+        return 'Vehicle Issue';
+      case 'SAFETY_CONCERN':
+        return 'Safety Concern';
+      case 'OTHER':
+        return 'Other';
+      default:
+        return 'Other';
+    }
+  };
+
   const reportTypes: ReportType[] = [
     {
       id: 'vehicle_issue',
@@ -217,9 +247,11 @@ export default function ReportScreen() {
     }
 
     try {
+      const incidentType = getIncidentType(selectedReportType.id);
+
       const incidentData: CreateIncidentRequest = {
         description: reportDescription.trim(),
-        incident_type: 'VEHICLE_ISSUE',
+        incident_type: incidentType,
         location: currentLocation,
         severity: selectedSeverity,
       };
@@ -231,7 +263,7 @@ export default function ReportScreen() {
       if (isConnected) {
         sendIncidentReport({
           description: reportDescription.trim(),
-          incident_type: 'VEHICLE_ISSUE',
+          incident_type: incidentType,
           severity: selectedSeverity,
           location: currentLocation,
         });
@@ -298,7 +330,7 @@ export default function ReportScreen() {
     <View key={report.id} style={styles.reportCard}>
       <View style={styles.reportHeader}>
         <View style={styles.reportTitleContainer}>
-          <Text style={styles.reportTitle}>Vehicle Issue Report</Text>
+          <Text style={styles.reportTitle}>{report.title}</Text>
           <View style={styles.reportBadges}>
             {report.severity && (
               <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(report.severity) }]}>
