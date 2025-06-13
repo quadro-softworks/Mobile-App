@@ -18,6 +18,7 @@ import { LanguageSelector } from '@/components/LanguageSelector';
 import { colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
 import { router } from 'expo-router';
+import { userApi, UserProfile } from '@/services/userApi';
 
 interface AttendanceRecord {
   id: string;
@@ -53,6 +54,11 @@ export default function DriverProfileScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetStep, setResetStep] = useState<'email' | 'confirm'>('email');
   const [isResetting, setIsResetting] = useState(false);
+
+  // User profile data from API
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [assignedBus] = useState<AssignedBus>({
     id: 'BUS001',
     licensePlate: 'AA-123-456',
@@ -72,16 +78,47 @@ export default function DriverProfileScreen() {
     { id: '5', date: '2024-01-11', checkIn: '08:15', checkOut: '18:00', status: 'late' },
   ];
 
+  // Fetch user profile from API
+  const fetchUserProfile = async () => {
+    setIsLoadingProfile(true);
+    setProfileError(null);
+    try {
+      const profile = await userApi.getCurrentUser();
+      setUserProfile(profile);
+
+      // Update form fields with API data
+      setFirstName(profile.first_name || '');
+      setLastName(profile.last_name || '');
+      setPhone(profile.phone_number || '');
+
+      console.log('✅ User profile fetched successfully:', {
+        id: profile.id,
+        name: `${profile.first_name} ${profile.last_name}`,
+        email: profile.email,
+        role: profile.role
+      });
+    } catch (error) {
+      console.error('❌ Failed to fetch user profile:', error);
+      setProfileError((error as Error).message);
+
+      // Fallback to auth store data if API fails
+      if (user) {
+        const nameParts = user.name.split(' ');
+        setFirstName(nameParts[0] || '');
+        setLastName(nameParts.slice(1).join(' ') || '');
+        setPhone(user.phone || '');
+      }
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
+
   useEffect(() => {
     setAttendanceRecords(mockAttendance);
-    // Initialize form fields with user data
-    if (user) {
-      const nameParts = user.name.split(' ');
-      setFirstName(nameParts[0] || '');
-      setLastName(nameParts.slice(1).join(' ') || '');
-      setPhone(user.phone || '');
-    }
-  }, [user]);
+
+    // Fetch user profile when component mounts
+    fetchUserProfile();
+  }, []);
 
   const handleCheckInOut = () => {
     const now = new Date();
@@ -221,40 +258,38 @@ export default function DriverProfileScreen() {
     }
 
     try {
-      const { token } = useAuthStore.getState();
-      if (!token) {
-        Alert.alert('Error', 'Authentication token not found');
-        return;
-      }
-
-      const response = await fetch('https://guzosync-fastapi.onrender.com/api/account/me', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          first_name: firstName,
-          last_name: lastName,
-          phone_number: phone,
-          profile_image: '',
-        }),
+      // Use the userApi service for updating profile
+      const updatedProfile = await userApi.updateProfile({
+        first_name: firstName,
+        last_name: lastName,
+        phone_number: phone,
+        profile_image: '',
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to update profile');
+      // Update local state
+      setUserProfile(updatedProfile);
+
+      // Update the auth store with the new data
+      if (user) {
+        const updatedUser = {
+          ...user,
+          name: `${updatedProfile.first_name} ${updatedProfile.last_name}`,
+          email: updatedProfile.email,
+          phone: updatedProfile.phone_number || '',
+        };
+        useAuthStore.setState({ user: updatedUser });
       }
-
-      const updatedUser = await response.json();
-
-      // Update the user in the auth store
-      useAuthStore.setState({ user: updatedUser });
 
       setShowEditModal(false);
       Alert.alert('Success', 'Profile updated successfully');
+
+      console.log('✅ Profile updated successfully:', {
+        name: `${updatedProfile.first_name} ${updatedProfile.last_name}`,
+        email: updatedProfile.email,
+        phone: updatedProfile.phone_number
+      });
     } catch (error) {
-      console.error('Profile update error:', error);
+      console.error('❌ Profile update error:', error);
       Alert.alert('Error', (error as Error).message || 'Failed to update profile. Please try again.');
     }
   };
@@ -291,6 +326,22 @@ export default function DriverProfileScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Settings</Text>
+          {profileError && (
+            <TouchableOpacity
+              style={styles.refreshHeaderButton}
+              onPress={fetchUserProfile}
+              disabled={isLoadingProfile}
+            >
+              <Ionicons
+                name="refresh"
+                size={20}
+                color={isLoadingProfile ? colors.textSecondary : colors.primary}
+              />
+              <Text style={[styles.refreshHeaderText, { color: isLoadingProfile ? colors.textSecondary : colors.primary }]}>
+                Retry
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Profile Section */}
@@ -303,15 +354,97 @@ export default function DriverProfileScreen() {
             </View>
             <View style={styles.profileInfo}>
               <Text style={styles.welcomeText}>Welcome</Text>
-              <Text style={styles.userName}>{user?.name || 'Mr. John Doe'}</Text>
+              <Text style={styles.userName}>
+                {userProfile
+                  ? `${userProfile.first_name} ${userProfile.last_name}`
+                  : user?.name || 'Driver'
+                }
+              </Text>
+              {isLoadingProfile && (
+                <Text style={styles.loadingText}>Loading profile...</Text>
+              )}
+              {profileError && (
+                <Text style={styles.errorText}>Failed to load profile</Text>
+              )}
             </View>
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => setShowEditModal(true)}
-            >
-              <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
+            <View style={styles.profileActions}>
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => setShowEditModal(true)}
+              >
+                <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={fetchUserProfile}
+                disabled={isLoadingProfile}
+              >
+                <Ionicons
+                  name="refresh"
+                  size={20}
+                  color={isLoadingProfile ? colors.textSecondary : colors.primary}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
+
+          {/* User Credentials Display */}
+          {userProfile && (
+            <View style={styles.credentialsSection}>
+              <View style={styles.credentialItem}>
+                <View style={styles.credentialIcon}>
+                  <Ionicons name="mail" size={16} color={colors.primary} />
+                </View>
+                <View style={styles.credentialInfo}>
+                  <Text style={styles.credentialLabel}>Email</Text>
+                  <Text style={styles.credentialValue}>{userProfile.email}</Text>
+                </View>
+              </View>
+
+              <View style={styles.credentialItem}>
+                <View style={styles.credentialIcon}>
+                  <Ionicons name="call" size={16} color={colors.primary} />
+                </View>
+                <View style={styles.credentialInfo}>
+                  <Text style={styles.credentialLabel}>Phone</Text>
+                  <Text style={styles.credentialValue}>{userProfile.phone_number || 'Not set'}</Text>
+                </View>
+              </View>
+
+              <View style={styles.credentialItem}>
+                <View style={styles.credentialIcon}>
+                  <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
+                </View>
+                <View style={styles.credentialInfo}>
+                  <Text style={styles.credentialLabel}>Role</Text>
+                  <Text style={styles.credentialValue}>{userProfile.role.replace('_', ' ')}</Text>
+                </View>
+              </View>
+
+              <View style={styles.credentialItem}>
+                <View style={styles.credentialIcon}>
+                  <Ionicons name="id-card" size={16} color={colors.primary} />
+                </View>
+                <View style={styles.credentialInfo}>
+                  <Text style={styles.credentialLabel}>User ID</Text>
+                  <Text style={styles.credentialValue}>{userProfile.id}</Text>
+                </View>
+              </View>
+
+              <View style={styles.credentialItem}>
+                <View style={styles.credentialIcon}>
+                  <Ionicons name="checkmark-circle" size={16} color={userProfile.is_active ? colors.success : colors.error} />
+                </View>
+                <View style={styles.credentialInfo}>
+                  <Text style={styles.credentialLabel}>Status</Text>
+                  <Text style={[styles.credentialValue, { color: userProfile.is_active ? colors.success : colors.error }]}>
+                    {userProfile.is_active ? 'Active' : 'Inactive'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Menu Items */}
@@ -596,6 +729,18 @@ export default function DriverProfileScreen() {
           </View>
 
           <ScrollView style={styles.editModalContent}>
+            {userProfile && (
+              <View style={styles.profileInfoCard}>
+                <Text style={styles.profileInfoTitle}>Current Profile Information</Text>
+                <Text style={styles.profileInfoText}>Email: {userProfile.email}</Text>
+                <Text style={styles.profileInfoText}>Role: {userProfile.role}</Text>
+                <Text style={styles.profileInfoText}>User ID: {userProfile.id}</Text>
+                <Text style={styles.profileInfoText}>
+                  Status: {userProfile.is_active ? 'Active' : 'Inactive'}
+                </Text>
+              </View>
+            )}
+
             <Text style={styles.editFormLabel}>First Name</Text>
             <TextInput
               style={styles.editFormInput}
@@ -636,6 +781,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 16,
@@ -645,6 +793,18 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: colors.text,
+  },
+  refreshHeaderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: colors.card,
+  },
+  refreshHeaderText: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 4,
   },
   profileSection: {
     backgroundColor: colors.card,
@@ -683,6 +843,10 @@ const styles = StyleSheet.create({
   },
   editButton: {
     padding: 8,
+  },
+  profileActions: {
+    flexDirection: 'row',
+    gap: 8,
   },
   menuContainer: {
     backgroundColor: colors.card,
@@ -892,5 +1056,69 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     lineHeight: 20,
+  },
+
+  // New styles for user credentials display
+  loadingText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+  },
+  errorText: {
+    fontSize: 12,
+    color: colors.error,
+    fontStyle: 'italic',
+  },
+  credentialsSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  credentialItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  credentialIcon: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  credentialInfo: {
+    flex: 1,
+  },
+  credentialLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 2,
+  },
+  credentialValue: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '500',
+  },
+
+  // Profile info card styles
+  profileInfoCard: {
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  profileInfoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  profileInfoText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
   },
 });
